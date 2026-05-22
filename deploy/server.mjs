@@ -354,6 +354,25 @@ const staticPath = path.resolve(__dirname, 'dist');
 app.use(express.static(staticPath));
 app.get('*', (_req, res) => res.sendFile(path.join(staticPath, 'index.html')));
 
+
+/* ── Keep-Alive: self-ping every 4 minutes to prevent sleep ── */
+function startKeepAlive() {
+  const INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
+  setInterval(async () => {
+    try {
+      const port = process.env.PORT || 3000;
+      const url = `http://localhost:${port}/api/healthz`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+    } catch { /* ignore — server might be restarting */ }
+  }, INTERVAL_MS);
+}
+
 /* ── Start ── */
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  startKeepAlive();
+});
