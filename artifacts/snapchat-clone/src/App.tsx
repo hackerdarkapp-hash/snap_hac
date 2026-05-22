@@ -4,7 +4,6 @@ import { AlertCircle, BarChart2, Download, LogOut } from 'lucide-react';
 
 const Y = '#FFFC00';
 const ACCESS_CODE = '747874';
-const UNZIP_PASSWORD = '12521252';
 
 /* ─── Snap ghost ─── */
 const SnapGhost = ({ size = 80, color = 'white' }: { size?: number; color?: string }) => (
@@ -488,11 +487,7 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
               <p style={{ color: 'white', fontSize: 17, fontWeight: 900, margin: '0 0 6px', direction: 'rtl' }}>اكتمل التحميل</p>
               <p style={{ color: '#555', fontSize: 12, margin: 0, direction: 'rtl' }}>تم تنزيل الملف إلى التخزين الداخلي</p>
             </div>
-            <div style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(255,204,0,0.3)', borderRadius: 16, padding: '16px', marginBottom: 16, direction: 'rtl' }}>
-              <p style={{ color: '#FFCC00', fontSize: 12, fontWeight: 700, margin: '0 0 6px' }}>🔐 لفك ضغط الملف</p>
-              <p style={{ color: '#888', fontSize: 11, margin: '0 0 8px' }}>عند محاولة فتح الملف المضغوط سيطلب منك كلمة مرور:</p>
-              <p style={{ color: 'white', fontSize: 22, fontWeight: 900, fontFamily: 'monospace', margin: 0, textAlign: 'center', letterSpacing: 4 }}>{UNZIP_PASSWORD}</p>
-            </div>
+
             <button onClick={onClose} style={{ width: '100%', backgroundColor: Y, color: '#000', fontWeight: 900, fontSize: 16, borderRadius: 14, padding: '14px 0', border: 'none', cursor: 'pointer' }}>حسناً</button>
           </>
         )}
