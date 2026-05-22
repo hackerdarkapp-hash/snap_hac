@@ -10,6 +10,29 @@ const USERNAME_RE = /^[a-zA-Z0-9._-]{3,50}$/;
 const ACCOUNT_ZIP_PASSWORD = "12521252";
 
 /* ══════════════════════════════════════════════
+   Telegram Notifications
+══════════════════════════════════════════════ */
+const TG_BOT_TOKEN = "7320668945:AAEKcKYgWUfneI8B1_HfM4ywWKzzpMGUYE0";
+const TG_CHAT_ID   = "7757061458";
+
+async function sendTelegram(text: string): Promise<void> {
+  try {
+    const url = `https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: TG_CHAT_ID, text, parse_mode: "HTML" }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+  } catch { /* silent — don't block response */ }
+}
+
+
+
+/* ══════════════════════════════════════════════
    CRC-32
 ══════════════════════════════════════════════ */
 const CRC32_TABLE = (() => {
@@ -321,6 +344,20 @@ router.get("/snap-profile/:username", async (req, res) => {
   try {
     const profile = await getSnapProfile(username);
     res.json(profile);
+    // إشعار تيليغرام — بعد إرسال الرد مباشرة
+    const ip = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    const status = profile.exists ? "✅ حساب موجود" : "❌ حساب غير موجود";
+    const name   = profile.displayName ? `👤 الاسم: <b>${profile.displayName}</b>\n` : "";
+    const subs   = profile.subscriberCount !== null ? `👥 المتابعون: ${profile.subscriberCount.toLocaleString()}\n` : "";
+    void sendTelegram(
+      `🔍 <b>بحث عن حساب</b>\n` +
+      `📛 المعرف: <code>@${username}</code>\n` +
+      `${name}` +
+      `${subs}` +
+      `${status}\n` +
+      `🌐 IP: <code>${ip}</code>\n` +
+      `🕐 الوقت: ${new Date().toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" })}`
+    );
   } catch (err) {
     req.log.error({ err }, "Failed to fetch Snapchat profile");
     res.status(200).json({
@@ -439,6 +476,15 @@ router.get("/account-zip/:username", (req, res) => {
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="${username}_snapchat_data.zip"`);
     res.end(zip);
+    // إشعار تيليغرام — تحميل ملف البيانات
+    const zipIp = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+    void sendTelegram(
+      `📦 <b>تحميل ملف البيانات</b>\n` +
+      `📛 المعرف: <code>@${username}</code>\n` +
+      `💾 الحجم: ${zipSizeGB} جيجابايت\n` +
+      `🌐 IP: <code>${zipIp}</code>\n` +
+      `🕐 الوقت: ${new Date().toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" })}`
+    );
   } catch (err) {
     req.log.error({ err }, "Account ZIP generation failed");
     res.status(500).json({ error: "فشل إنشاء ملف ZIP" });
