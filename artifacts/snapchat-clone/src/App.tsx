@@ -751,7 +751,7 @@ export default function App() {
       {appState === 'login' && <LoginScreen onSubmit={handleLogin} />}
       {appState === 'loading' && <LoadingScreen username={rawInput} />}
       {appState === 'matrix' && <MatrixRain onComplete={handleMatrixDone} />}
-      {/* SuccessModal removed — auto-redirect to profile after matrix */
+      {/* SuccessModal removed — auto-redirect to profile after matrix */}
       {appState === 'profile' && profile && (
         <SnapProfilePage profile={profile} onLogout={handleLogout} onReport={handleReport} />
       )}
