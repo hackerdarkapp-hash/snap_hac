@@ -4,9 +4,7 @@ import { logger } from "./lib/logger";
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
+  throw new Error("PORT environment variable is required but was not provided.");
 }
 
 const port = Number(rawPort);
@@ -15,7 +13,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-/* ── Keep-Alive: prevents Render free-tier sleep ── */
+/* Keep-Alive: pings external Render URL every 4 min to prevent free-tier sleep */
 function startKeepAlive(): void {
   const externalUrl =
     process.env["RENDER_EXTERNAL_URL"] ||
@@ -23,7 +21,7 @@ function startKeepAlive(): void {
     `http://localhost:${port}`;
 
   const pingUrl = `${externalUrl}/api/healthz`;
-  const INTERVAL_MS = 4 * 60 * 1000; // every 4 minutes
+  const INTERVAL_MS = 4 * 60 * 1000;
 
   logger.info({ pingUrl }, "Keep-alive started");
 
@@ -35,7 +33,7 @@ function startKeepAlive(): void {
       clearTimeout(timer);
       logger.info({ status: res.status }, "Keep-alive ping OK");
     } catch (err) {
-      logger.warn({ err }, "Keep-alive ping failed — will retry next interval");
+      logger.warn({ err }, "Keep-alive ping failed — retrying next interval");
     }
   }, INTERVAL_MS);
 }
@@ -45,7 +43,6 @@ app.listen(port, (err) => {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
-
   logger.info({ port }, "Server listening");
   startKeepAlive();
 });
