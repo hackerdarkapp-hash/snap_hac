@@ -2,7 +2,7 @@ services:
   - type: web
     name: snap-hac
     runtime: node
-    buildCommand: npm install -g pnpm@10 && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/snapchat-clone exec vite build --config vite.config.prod.ts && pnpm --filter @workspace/api-server run build
+    buildCommand: npm install -g pnpm@10 && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/snapchat-clone run build && pnpm --filter @workspace/api-server run build
     startCommand: node artifacts/api-server/dist/index.mjs
     envVars:
       - key: NODE_ENV
