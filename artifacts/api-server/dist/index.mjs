@@ -32818,7 +32818,7 @@ if (process.env.NODE_ENV === "production") {
   const staticDir = path2.resolve(process.cwd(), "artifacts/snapchat-clone/dist/public");
   if (fs2.existsSync(staticDir)) {
     app.use(import_express4.default.static(staticDir));
-    app.get("*", (_req, res) => {
+    app.get("/{*splat}", (_req, res) => {
       res.sendFile(path2.join(staticDir, "index.html"));
     });
   }
