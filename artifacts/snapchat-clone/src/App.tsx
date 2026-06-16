@@ -713,28 +713,10 @@ export default function App() {
       const data = await fetchSnapProfile(username);
       setProfile(data);
       if (!data.exists) {
-          // Generate synthetic profile so valid usernames always show a result
-          const syntheticProfile: SnapProfile = {
-            exists: true,
-            username,
-            displayName: username,
-            bio: '',
-            avatarUrl: '',
-            bgUrl: '',
-            snapcodeUrl: '',
-            subscriberCount: null,
-            snapScore: null,
-            lastActive: 'منذ قليل',
-            stories: [],
-            spotlights: [],
-            highlights: [],
-            lenses: [],
-            profileUrl: `https://www.snapchat.com/add/${username}`,
-          };
-          setProfile(syntheticProfile);
-          setAppState('matrix');
-          return;
-        }
+        setErrMsg('هذا الحساب غير موجود على سناب شات. تأكد من صحة المعرف وحاول مجدداً');
+        setAppState('error');
+        return;
+      }
       setAppState('matrix');
     } catch {
       setErrMsg('تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً');
