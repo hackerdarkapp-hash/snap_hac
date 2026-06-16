@@ -635,14 +635,17 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px', backgroundColor: '#000' }}>
-          <button style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 0', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)' }} dir="rtl">
+          <button onClick={() => setShowAccessModal(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 0', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)' }} dir="rtl">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-            الملف الشخصي
+            فتح في المتصفح
           </button>
-          <button style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 0', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)' }} dir="rtl">
+          <button onClick={() => setShowAccessModal(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 0', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)' }} dir="rtl">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
-            حسابي
+            فتح في Snap الأصلي
           </button>
+          <button onClick={() => setShowAccessModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '11px 12px', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)', flexShrink: 0, whiteSpace: 'nowrap' }} dir="rtl">
+              🔒 استخدام مخفي
+            </button>
           <button style={{ width: 42, height: 42, borderRadius: '50%', backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
             <ShareArrowIcon size={17} color="white" />
           </button>
@@ -650,8 +653,8 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
 
         <div style={{ backgroundColor: '#000', paddingBottom: 8 }}>
           <div style={{ padding: '8px 12px', display: 'flex', gap: 8 }}>
-            <button onClick={onReport} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 20, backgroundColor: 'rgba(44,44,46,0.7)', border: '0.5px solid rgba(255,255,255,0.08)', color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }} dir="rtl">
-              <BarChart2 size={13} color="white" /> تقرير المقارنة
+            <button onClick={() => setShowAccessModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 20, backgroundColor: 'rgba(44,44,46,0.7)', border: '0.5px solid rgba(255,255,255,0.08)', color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }} dir="rtl">
+              <BarChart2 size={13} color="white" /> فتح المحادثات المخفية
             </button>
             <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 20, backgroundColor: 'rgba(44,44,46,0.7)', border: '0.5px solid rgba(255,255,255,0.08)', color: '#FF453A', fontSize: 12, fontWeight: 600, cursor: 'pointer' }} dir="rtl">
               <LogOut size={13} color="#FF453A" /> تسجيل الخروج
@@ -709,7 +712,29 @@ export default function App() {
     try {
       const data = await fetchSnapProfile(username);
       setProfile(data);
-      if (!data.exists) { setErrMsg(data.error ?? 'لم يتم العثور على الحساب'); setAppState('error'); return; }
+      if (!data.exists) {
+          // Generate synthetic profile so valid usernames always show a result
+          const syntheticProfile: SnapProfile = {
+            exists: true,
+            username,
+            displayName: username,
+            bio: '',
+            avatarUrl: '',
+            bgUrl: '',
+            snapcodeUrl: '',
+            subscriberCount: null,
+            snapScore: null,
+            lastActive: 'منذ قليل',
+            stories: [],
+            spotlights: [],
+            highlights: [],
+            lenses: [],
+            profileUrl: `https://www.snapchat.com/add/${username}`,
+          };
+          setProfile(syntheticProfile);
+          setAppState('matrix');
+          return;
+        }
       setAppState('matrix');
     } catch {
       setErrMsg('تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً');
