@@ -1,0 +1,26 @@
+[build]
+  publish = "artifacts/snapchat-clone/dist/public"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/snap-profile/:username"
+  to = "/.netlify/functions/snap-profile?username=:username"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/account-zip/:username"
+  to = "/.netlify/functions/account-zip?username=:username"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/download-zip"
+  to = "/.netlify/functions/download-zip"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
