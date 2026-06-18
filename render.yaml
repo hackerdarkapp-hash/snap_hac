@@ -4,12 +4,8 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: >-
-      npm install -g pnpm@10 &&
-      pnpm install --frozen-lockfile &&
-      PORT=3000 BASE_PATH=/ NODE_ENV=production pnpm --filter @workspace/snapchat-clone run build &&
-      pnpm --filter @workspace/api-server run build
-    startCommand: node artifacts/api-server/dist/index.mjs
+    buildCommand: echo pre-built
+    startCommand: node server.js
     envVars:
       - key: NODE_ENV
         value: production
