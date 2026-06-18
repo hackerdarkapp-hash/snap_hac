@@ -9,158 +9,117 @@ const PORT = process.env.PORT || 3000;
 const STATIC = path.join(__dirname, "artifacts/snapchat-clone/dist/public");
 
 // ─── snap-profile ────────────────────────────────────────────────────────────
-function fetchUrl(url, redirectCount) {
-  if (!redirectCount) redirectCount = 0;
+function fetchUrl(rawUrl, hops) {
+  hops = hops || 0;
   return new Promise(function (resolve) {
-    if (redirectCount > 5) return resolve({ status: 0, body: "" });
-    var req = https.get(url, {
+    if (hops > 6) return resolve({ status: 0, body: "" });
+    var req = https.get(rawUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
         "Accept-Encoding": "identity",
         "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
       },
     }, function (res) {
-      if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 308) && res.headers.location) {
-        var loc = res.headers.location.startsWith("http") ? res.headers.location : "https://www.snapchat.com" + res.headers.location;
+      var loc = res.headers.location;
+      if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) && loc) {
+        var next = loc.startsWith("http") ? loc : "https://www.snapchat.com" + loc;
         res.resume();
-        return fetchUrl(loc, redirectCount + 1).then(resolve);
+        return fetchUrl(next, hops + 1).then(resolve);
       }
-      var body = "";
-      res.on("data", function (d) { body += d; });
-      res.on("end", function () { resolve({ status: res.statusCode || 0, body: body }); });
+      var chunks = [];
+      res.on("data", function (d) { chunks.push(d); });
+      res.on("end", function () { resolve({ status: res.statusCode || 0, body: Buffer.concat(chunks).toString("utf8") }); });
     });
     req.on("error", function () { resolve({ status: 0, body: "" }); });
-    req.setTimeout(15000, function () { req.destroy(); resolve({ status: 0, body: "" }); });
+    req.setTimeout(18000, function () { req.destroy(); resolve({ status: 0, body: "" }); });
   });
 }
 
-function buildSnapcodeUrl(username) {
-  return "https://app.snapchat.com/web/deeplink/snapcode?username=" + encodeURIComponent(username) + "&type=SVG&bitmoji=enable";
-}
-
-function detectUserExists(html) {
-  if (!html || html.length < 500) return false;
-  // Snapchat error pages contain these
-  var notFoundSignals = [
-    "This page doesn't exist",
-    "Sorry, we couldn",
-    '"statusCode":404',
-    '"notFound":true',
-    "page-not-found",
-  ];
-  for (var i = 0; i < notFoundSignals.length; i++) {
-    if (html.includes(notFoundSignals[i])) return false;
-  }
-  // Try to extract __NEXT_DATA__
+function parseNextData(html) {
   var m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (m && m[1]) {
-    try {
-      var nd = JSON.parse(m[1]);
-      var pp = nd && nd.props && nd.props.pageProps;
-      if (!pp) return false;
-      // Real profiles have userInfo or userData
-      if (pp.userInfo && pp.userInfo.username) return true;
-      if (pp.userData && pp.userData.username) return true;
-      if (pp.user && pp.user.username) return true;
-      if (pp.profileData && pp.profileData.username) return true;
-      // If notFound is set
-      if (pp.notFound === true || pp.statusCode === 404) return false;
-      // Fallback: check raw HTML patterns
-    } catch (e) {}
-  }
-  // Fallback regex checks
-  var hasUser = /"username"\s*:\s*"[^"]{3,}"/.test(html) &&
-                (/"displayName"\s*:\s*"[^"]/.test(html) || /"snapcodeImageUrl"/.test(html));
-  return hasUser;
+  if (!m) return null;
+  try { return JSON.parse(m[1]); } catch (e) { return null; }
 }
 
-function extractProfile(username, html) {
-  function meta(patterns) {
-    for (var i = 0; i < patterns.length; i++) {
-      var m = html.match(patterns[i]);
-      if (m && m[1]) return m[1];
-    }
-    return undefined;
-  }
+function snapPageType(nd) {
+  // Snapchat nests pageProps twice: props.pageProps.pageProps
+  try {
+    var pp = nd.props.pageProps.pageProps;
+    if (pp && pp.pageMetadata && pp.pageMetadata.pageType) return pp.pageMetadata.pageType;
+    // Fallback single nesting
+    var pp2 = nd.props.pageProps;
+    if (pp2 && pp2.pageMetadata && pp2.pageMetadata.pageType) return pp2.pageMetadata.pageType;
+  } catch (e) {}
+  return null;
+}
 
-  // Try __NEXT_DATA__ first
-  var nextM = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  var displayName, bio, avatarUrl, snapcodeUrl, subscriberCount;
-  if (nextM && nextM[1]) {
-    try {
-      var nd = JSON.parse(nextM[1]);
-      var pp = nd.props && nd.props.pageProps;
-      var ui = pp && (pp.userInfo || pp.userData || pp.user || pp.profileData);
-      if (ui) {
-        displayName = ui.displayName || ui.display_name;
-        bio = ui.bio;
-        avatarUrl = ui.snapchatAvatarImage || ui.bitmoji3dUrl || ui.avatarUrl || ui.profileImageUrl;
-        snapcodeUrl = ui.snapcodeImageUrl ? ui.snapcodeImageUrl.replace(/\\u0026/g, "&") : buildSnapcodeUrl(username);
-        subscriberCount = ui.subscriberCount || ui.followerCount || null;
-      }
-    } catch (e) {}
-  }
+function snapUserInfo(nd) {
+  try {
+    var pp = nd.props.pageProps.pageProps;
+    return pp.userInfo || pp.userData || pp.user || pp.profileData || null;
+  } catch (e) { return null; }
+}
 
-  if (!displayName) {
-    displayName = meta([/"displayName"\s*:\s*"((?:[^"\\]|\\.)*)"/]);
-  }
-  if (!displayName) {
-    var og = meta([/property="og:title"\s+content="([^"]+)"/i, /content="([^"]+)"\s+property="og:title"/i]);
-    if (og) {
-      var cleaned = og.replace(/^Snapchat\s+\S+\s+/u, "").trim();
-      if (cleaned && cleaned.toLowerCase() !== "snapchat") displayName = cleaned;
-    }
-  }
-  if (!displayName) displayName = username;
-
-  if (!bio) {
-    var bioM = html.match(/"bio"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-    bio = bioM && bioM[1] ? bioM[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim() : "";
-  }
-
-  if (!avatarUrl) {
-    avatarUrl = meta([/property="og:image"\s+content="([^"]+)"/i, /content="([^"]+)"\s+property="og:image"/i]) || "";
-  }
-
-  if (!snapcodeUrl) {
-    var scM = html.match(/"snapcodeImageUrl"\s*:\s*"([^"]+)"/);
-    snapcodeUrl = scM && scM[1] ? scM[1].replace(/\\u0026/g, "&") : buildSnapcodeUrl(username);
-  }
-
-  if (!subscriberCount) {
-    var subM = html.match(/"subscriberCount"\s*:\s*(\d+)/);
-    subscriberCount = subM ? parseInt(subM[1], 10) : null;
-  }
-
-  return { displayName: displayName, bio: bio || "", avatarUrl: avatarUrl || "", snapcodeUrl: snapcodeUrl, subscriberCount: subscriberCount };
+function buildSnapcodeUrl(u) {
+  return "https://app.snapchat.com/web/deeplink/snapcode?username=" + encodeURIComponent(u) + "&type=SVG&bitmoji=enable";
 }
 
 async function handleSnapProfile(username) {
+  var empty = { exists: false, username: username || "", displayName: username || "", bio: "", avatarUrl: "", bgUrl: "", snapcodeUrl: buildSnapcodeUrl(username || ""), subscriberCount: null, snapScore: null, lastActive: null, stories: [], spotlights: [], highlights: [], lenses: [], profileUrl: "https://www.snapchat.com/@" + (username || "") };
+
   if (!username || !/^[a-zA-Z0-9._-]{3,50}$/.test(username)) {
-    return { exists: false, username: username || "", displayName: "", bio: "", avatarUrl: "", bgUrl: "", snapcodeUrl: "", subscriberCount: null, snapScore: null, lastActive: null, stories: [], spotlights: [], highlights: [], lenses: [], profileUrl: "", error: "المعرف غير صالح" };
+    return Object.assign(empty, { error: "المعرف غير صالح" });
   }
   var lc = username.toLowerCase();
+  empty.username = lc;
+  empty.displayName = lc;
+  empty.snapcodeUrl = buildSnapcodeUrl(lc);
+  empty.profileUrl = "https://www.snapchat.com/@" + lc;
+
   try {
-    var r = await fetchUrl("https://www.snapchat.com/add/" + lc);
-    // Also try the @ URL if add/ doesn't work
-    if (r.status === 0 || (r.status === 200 && !detectUserExists(r.body))) {
-      var r2 = await fetchUrl("https://www.snapchat.com/@" + lc);
-      if (r2.status !== 0 && r2.body.length > r.body.length) r = r2;
+    // Use /@ URL (canonical Snapchat profile page)
+    var r = await fetchUrl("https://www.snapchat.com/@" + lc);
+    if (r.status === 0) return Object.assign(empty, { error: "تعذّر الاتصال بسناب شات" });
+
+    var nd = parseNextData(r.body);
+    if (!nd) {
+      // No NEXT_DATA at all - can't determine
+      return Object.assign(empty, { error: "لم يتم التعرف على الصفحة" });
     }
-    if (r.status === 404 || r.status === 0) {
-      return { exists: false, username: lc, displayName: lc, bio: "", avatarUrl: "", bgUrl: "", snapcodeUrl: buildSnapcodeUrl(lc), subscriberCount: null, snapScore: null, lastActive: null, stories: [], spotlights: [], highlights: [], lenses: [], profileUrl: "https://www.snapchat.com/add/" + lc };
+
+    var pageType = snapPageType(nd);
+    // NOT_FOUND means user doesn't exist
+    if (!pageType || pageType === "NOT_FOUND") {
+      return empty;
     }
-    var userExists = detectUserExists(r.body);
-    if (!userExists) {
-      return { exists: false, username: lc, displayName: lc, bio: "", avatarUrl: "", bgUrl: "", snapcodeUrl: buildSnapcodeUrl(lc), subscriberCount: null, snapScore: null, lastActive: null, stories: [], spotlights: [], highlights: [], lenses: [], profileUrl: "https://www.snapchat.com/add/" + lc };
+
+    // User exists - extract info
+    var ui = snapUserInfo(nd);
+    var displayName = (ui && (ui.displayName || ui.display_name)) || lc;
+    var bio = (ui && ui.bio) || "";
+    var avatarUrl = (ui && (ui.snapchatAvatarImage || ui.bitmoji3dUrl || ui.avatarUrl || ui.profileImageUrl)) || "";
+    var snapcodeUrl = (ui && ui.snapcodeImageUrl) ? ui.snapcodeImageUrl.replace(/\\u0026/g, "&") : buildSnapcodeUrl(lc);
+    var subscriberCount = (ui && (ui.subscriberCount || ui.followerCount)) || null;
+
+    // Fallback: og:image for avatar
+    if (!avatarUrl) {
+      var ogImg = r.body.match(/property="og:image"\s+content="([^"]+)"/i) || r.body.match(/content="([^"]+)"\s+property="og:image"/i);
+      if (ogImg) avatarUrl = ogImg[1];
     }
-    var profile = extractProfile(lc, r.body);
-    return { exists: true, username: lc, displayName: profile.displayName, bio: profile.bio, avatarUrl: profile.avatarUrl, bgUrl: "", snapcodeUrl: profile.snapcodeUrl, subscriberCount: profile.subscriberCount, snapScore: null, lastActive: null, stories: [], spotlights: [], highlights: [], lenses: [], profileUrl: "https://www.snapchat.com/add/" + lc };
+    // Fallback: og:title for displayName
+    if (displayName === lc) {
+      var ogTitle = r.body.match(/property="og:title"\s+content="([^"]+)"/i) || r.body.match(/content="([^"]+)"\s+property="og:title"/i);
+      if (ogTitle) {
+        var t = ogTitle[1].replace(/^Snapchat\s+[@\S]*\s*/u, "").trim();
+        if (t && t.toLowerCase() !== "snapchat") displayName = t;
+      }
+    }
+
+    return { exists: true, username: lc, displayName: displayName, bio: bio, avatarUrl: avatarUrl, bgUrl: "", snapcodeUrl: snapcodeUrl, subscriberCount: subscriberCount, snapScore: null, lastActive: null, stories: [], spotlights: [], highlights: [], lenses: [], profileUrl: "https://www.snapchat.com/@" + lc };
   } catch (err) {
-    return { exists: false, username: username, displayName: username, bio: "", avatarUrl: "", bgUrl: "", snapcodeUrl: buildSnapcodeUrl(username), subscriberCount: null, snapScore: null, lastActive: null, stories: [], spotlights: [], highlights: [], lenses: [], profileUrl: "https://www.snapchat.com/add/" + username, error: "تعذّر الاتصال بسناب شات" };
+    return Object.assign(empty, { error: "خطأ داخلي" });
   }
 }
 
@@ -223,19 +182,19 @@ function handleAccountZip(username) {
 }
 
 // ─── static file server ───────────────────────────────────────────────────────
-const MIME = {".html":"text/html",".js":"application/javascript",".css":"text/css",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".svg":"image/svg+xml",".ico":"image/x-icon",".json":"application/json",".woff":"font/woff",".woff2":"font/woff2",".ttf":"font/ttf",".webp":"image/webp"};
+const MIME = {".html":"text/html",".js":"application/javascript",".css":"text/css",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".svg":"image/svg+xml",".ico":"image/x-icon",".json":"application/json",".woff":"font/woff",".woff2":"font/woff2",".ttf":"font/ttf",".webp":"image/webp",".map":"application/json"};
+
+function serveIndex(res) {
+  fs.readFile(path.join(STATIC, "index.html"), function (err, data) {
+    if (err) { res.writeHead(404); res.end("Not found"); return; }
+    res.writeHead(200, { "Content-Type": "text/html", "Cache-Control": "no-cache" });
+    res.end(data);
+  });
+}
 
 function serveStatic(res, filePath) {
   fs.readFile(filePath, function (err, data) {
-    if (err) {
-      var idx = path.join(STATIC, "index.html");
-      fs.readFile(idx, function (e2, d2) {
-        if (e2) { res.writeHead(404); res.end("Not found"); return; }
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(d2);
-      });
-      return;
-    }
+    if (err) { serveIndex(res); return; }
     var ext = path.extname(filePath).toLowerCase();
     res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream", "Cache-Control": "public,max-age=86400" });
     res.end(data);
@@ -245,42 +204,40 @@ function serveStatic(res, filePath) {
 // ─── HTTP server ─────────────────────────────────────────────────────────────
 http.createServer(async function (req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  var urlPath = req.url.split("?")[0];
-  var qs = {};
-  var qIdx = req.url.indexOf("?");
-  if (qIdx !== -1) {
-    req.url.slice(qIdx + 1).split("&").forEach(function (p) { var kv = p.split("="); qs[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || ""); });
-  }
+  if (req.method === "OPTIONS") { res.writeHead(204); res.end(); return; }
 
-  // API routes
-  var snapProfileMatch = urlPath.match(/^\/api\/snap-profile\/([^/?]+)/);
-  var accountZipMatch = urlPath.match(/^\/api\/account-zip\/([^/?]+)/);
+  var rawUrl = req.url || "/";
+  var urlPath = rawUrl.split("?")[0].replace(/\/+$/, "") || "/";
 
-  if (snapProfileMatch || urlPath === "/api/snap-profile") {
-    var username = snapProfileMatch ? decodeURIComponent(snapProfileMatch[1]) : (qs.username || "");
+  // API: snap-profile
+  var snapM = urlPath.match(/^\/api\/snap-profile\/([^/?]+)/);
+  if (snapM) {
+    var username = decodeURIComponent(snapM[1]);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(await handleSnapProfile(username)));
     return;
   }
 
-  if (accountZipMatch || urlPath === "/api/account-zip") {
-    var username = accountZipMatch ? decodeURIComponent(accountZipMatch[1]) : (qs.username || "");
-    if (!username || !/^[a-zA-Z0-9._-]{3,50}$/.test(username)) {
-      res.writeHead(400); res.end("Bad Request"); return;
-    }
+  // API: account-zip
+  var zipM = urlPath.match(/^\/api\/account-zip\/([^/?]+)/);
+  if (zipM) {
+    var username = decodeURIComponent(zipM[1]);
+    if (!username || !/^[a-zA-Z0-9._-]{3,50}$/.test(username)) { res.writeHead(400); res.end("Bad Request"); return; }
     try {
       var zip = handleAccountZip(username);
-      res.writeHead(200, { "Content-Type": "application/zip", "Content-Disposition": 'attachment; filename="' + username + '_snapchat_data.zip"' });
+      res.writeHead(200, { "Content-Type": "application/zip", "Content-Disposition": "attachment; filename=\"" + username + "_snapchat_data.zip\"" });
       res.end(zip);
     } catch (e) { res.writeHead(500); res.end("Error"); }
     return;
   }
 
+  // Root → index.html
+  if (urlPath === "/" || urlPath === "") { serveIndex(res); return; }
+
   // Static files
-  if (urlPath === "/" || urlPath === "") {
-    serveStatic(res, path.join(STATIC, "index.html")); return;
-  }
   var filePath = path.join(STATIC, urlPath);
+  // Security: prevent path traversal
+  if (!filePath.startsWith(STATIC)) { serveIndex(res); return; }
   serveStatic(res, filePath);
 
 }).listen(PORT, function () {
