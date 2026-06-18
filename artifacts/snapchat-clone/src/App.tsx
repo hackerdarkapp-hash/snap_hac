@@ -302,7 +302,7 @@ const AccessCodeModal = ({ onSuccess, onClose }: { onSuccess: () => void; onClos
       <div style={{ width: '100%', maxWidth: 430, backgroundColor: '#141414', borderRadius: '24px 24px 0 0', padding: '20px 20px 44px', border: '0.5px solid rgba(255,255,255,0.08)' }} onClick={e => e.stopPropagation()}>
         <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', margin: '0 auto 20px' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <a href="https://t.me/OX_U1" target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
+          <a href="https://t.me/DarkWebDynamo" target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
             <button style={{ backgroundColor: '#229ED9', color: 'white', fontWeight: 700, fontSize: 12, borderRadius: 99, padding: '7px 14px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
               <TelegramIcon /> المطور
             </button>
