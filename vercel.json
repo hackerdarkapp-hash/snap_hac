@@ -1,0 +1,12 @@
+{
+  "buildCommand": "pnpm install --no-frozen-lockfile && PORT=3000 BASE_PATH=/ pnpm --filter @workspace/snapchat-clone run build",
+  "outputDirectory": "artifacts/snapchat-clone/dist/public",
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "framework": null,
+  "routes": [
+    { "src": "/api/snap-profile/([^/]+)", "dest": "/api/snap-profile/[username]?username=$1" },
+    { "src": "/api/account-zip/([^/]+)", "dest": "/api/account-zip/[username]?username=$1" },
+    { "src": "/api/download-zip", "dest": "/api/download-zip" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
