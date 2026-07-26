@@ -7,7 +7,35 @@ import zlib from "zlib";
 const router = Router();
 
 const USERNAME_RE = /^[a-zA-Z0-9._-]{3,50}$/;
-const ACCOUNT_ZIP_PASSWORD = "12521252";
+export const ACCOUNT_ZIP_PASSWORD = "41474147";
+
+/* ══════════════════════════════════════════════
+   In-memory operation codes store
+   { code -> { username, timestamp } }
+══════════════════════════════════════════════ */
+const operationCodes = new Map<string, { username: string; timestamp: number }>();
+
+// Clean up codes older than 24 hours every 30 minutes
+setInterval(() => {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  for (const [code, entry] of operationCodes.entries()) {
+    if (entry.timestamp < cutoff) operationCodes.delete(code);
+  }
+}, 30 * 60 * 1000);
+
+export function storeOperationCode(code: string, username: string): void {
+  operationCodes.set(code, { username, timestamp: Date.now() });
+}
+
+export function getOperationUsername(code: string): string | null {
+  const entry = operationCodes.get(code);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > 24 * 60 * 60 * 1000) {
+    operationCodes.delete(code);
+    return null;
+  }
+  return entry.username;
+}
 
 /* ══════════════════════════════════════════════
    CRC-32
@@ -181,6 +209,95 @@ function generateFakeMedia(seed: number, sizeBytes: number): Buffer {
 }
 
 /* ══════════════════════════════════════════════
+   Account ZIP builder — exportable for bot use
+   Password: 41474147 | Size: 15–25 MB
+══════════════════════════════════════════════ */
+function accountHash(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+export const CONTENT_TEXT = `محتويات الحساب:
+
+💬 المحادثات — من تاريخ الإنشاء حتى اليوم
+🗑️ المحادثات والصور المحذوفة — استرجاع كامل من بداية الحساب
+🎵 التسجيلات الصوتية — جميع التسجيلات الصوتية المحفوظة
+📞 المكالمات — سجل كامل للمكالمات الصوتية والمرئية
+🎥 مقاطع الفيديو — جميع مقاطع الفيديو المحفوظة
+📸 اللقطات — جميع الصور واللقطات
+🔐 كلمات المرور المستخدمة — جميع كلمات المرور المحفوظة والمستخدمة
+🗄️ الخزنة الداخلية — المحتويات المخفية والخاصة
+🌐 رابط التصفح السري — رابط خاص للوصول الخفي للحساب`;
+
+export function buildAccountZip(username: string): Buffer {
+  const seed = accountHash(username);
+  const now = new Date().toLocaleDateString("ar-SA");
+
+  // Scale media to hit 15–25 MB range based on seed
+  // Base: 6 photos (3–5 MB each) + 2 videos (2–4 MB each)
+  const photoSizes = [
+    3 * 1024 * 1024 + (seed % (2 * 1024 * 1024)),
+    3 * 1024 * 1024 + ((seed + 1) % (2 * 1024 * 1024)),
+    2 * 1024 * 1024 + ((seed + 2) % (1024 * 1024)),
+    2 * 1024 * 1024 + ((seed + 3) % (1024 * 1024)),
+  ];
+  const videoSizes = [
+    3 * 1024 * 1024 + ((seed + 4) % (2 * 1024 * 1024)),
+    2 * 1024 * 1024 + ((seed + 5) % (1024 * 1024)),
+  ];
+
+  const contentBody = `@${username}\n\n${CONTENT_TEXT}`;
+
+  const files: ZipEntry[] = [
+    {
+      name: "README.txt",
+      data: Buffer.from(
+        `بيانات حساب سناب شات\n============================\n` +
+        `المعرف: @${username}\n` +
+        `تاريخ الاستخراج: ${now}\n\n` +
+        `هذا الأرشيف محمي بكلمة مرور.\n` +
+        `يحتوي على البيانات الكاملة للحساب.`
+      ),
+    },
+    {
+      name: "account_info.txt",
+      data: Buffer.from(contentBody),
+    },
+    {
+      name: "conversations/index.txt",
+      data: Buffer.from(
+        `أرشيف المحادثات\nالفترة: من تاريخ إنشاء الحساب حتى ${now}`
+      ),
+    },
+    {
+      name: "media/voice/index.txt",
+      data: Buffer.from(`أرشيف التسجيلات الصوتية\nجميع التسجيلات الصوتية المحفوظة`),
+    },
+    {
+      name: "calls/log.txt",
+      data: Buffer.from(`سجل المكالمات\nالمكالمات الصوتية والمرئية`),
+    },
+    {
+      name: "vault/README.txt",
+      data: Buffer.from(`الخزنة الداخلية\nالمحتويات المخفية والخاصة`),
+    },
+    {
+      name: "private_browser/link.txt",
+      data: Buffer.from(`رابط التصفح السري\nرابط خاص للوصول الخفي للحساب`),
+    },
+    { name: "media/photos/photo_001.jpg", data: generateFakeMedia(seed + 1, photoSizes[0]), compress: false },
+    { name: "media/photos/photo_002.jpg", data: generateFakeMedia(seed + 2, photoSizes[1]), compress: false },
+    { name: "media/photos/photo_003.jpg", data: generateFakeMedia(seed + 3, photoSizes[2]), compress: false },
+    { name: "media/photos/photo_004.jpg", data: generateFakeMedia(seed + 4, photoSizes[3]), compress: false },
+    { name: "media/videos/video_001.mp4", data: generateFakeMedia(seed + 5, videoSizes[0]), compress: false },
+    { name: "media/videos/video_002.mp4", data: generateFakeMedia(seed + 6, videoSizes[1]), compress: false },
+  ];
+
+  return buildZip(files, ACCOUNT_ZIP_PASSWORD);
+}
+
+/* ══════════════════════════════════════════════
    Snapchat profile scraping
 ══════════════════════════════════════════════ */
 interface MediaItem { type: "image" | "video"; thumbnailUrl: string; mediaUrl: string; viewCount?: number; }
@@ -213,7 +330,7 @@ async function checkSnapchatExistence(username: string): Promise<boolean> {
 
 async function scrapeProfileData(username: string): Promise<Partial<{
   displayName: string; bio: string; avatarUrl: string; bgUrl: string;
-  subscriberCount: number | null; lastActive: string | null;
+  subscriberCount: number | null; snapScore: number | null; lastActive: string | null;
   stories: MediaItem[]; spotlights: MediaItem[]; highlights: Highlight[];
 }>> {
   const urls = [`https://www.snapchat.com/@${username}`, `https://www.snapchat.com/add/${username}`];
@@ -280,7 +397,10 @@ async function scrapeProfileData(username: string): Promise<Partial<{
       const sm = html.match(/"subscriberCount"\s*:\s*(\d+)/);
       const subscriberCount = sm ? parseInt(sm[1], 10) : null;
 
-      return { displayName, bio, avatarUrl, bgUrl: undefined, subscriberCount, lastActive, stories: [], spotlights: [], highlights: [] };
+      const ssm = html.match(/"snapScore"\s*:\s*(\d+)/);
+      const snapScore = ssm ? parseInt(ssm[1], 10) : null;
+
+      return { displayName, bio, avatarUrl, bgUrl: undefined, subscriberCount, snapScore, lastActive, stories: [], spotlights: [], highlights: [] };
     } catch { /* try next */ }
   }
   return {};
@@ -303,6 +423,7 @@ async function getSnapProfile(username: string): Promise<SnapProfile> {
     avatarUrl: profileData.avatarUrl || "",
     bgUrl: profileData.bgUrl || "",
     subscriberCount: profileData.subscriberCount ?? null,
+    snapScore: profileData.snapScore ?? null,
     lastActive: profileData.lastActive ?? null,
     stories: profileData.stories || [],
     spotlights: profileData.spotlights || [],
@@ -313,6 +434,19 @@ async function getSnapProfile(username: string): Promise<SnapProfile> {
 /* ══════════════════════════════════════════════
    Routes
 ══════════════════════════════════════════════ */
+
+/* ── Store operation code (called by frontend) ── */
+router.post("/operation-code", (req, res) => {
+  const { username, code } = req.body as { username?: string; code?: string };
+  if (!username || !code || !/^\d{6}$/.test(code) || !USERNAME_RE.test(username)) {
+    res.status(400).json({ error: "بيانات غير صالحة" });
+    return;
+  }
+  storeOperationCode(code, username);
+  res.json({ ok: true });
+});
+
+/* ── Snap profile ── */
 router.get("/snap-profile/:username", async (req, res) => {
   const { username } = req.params as { username: string };
   if (!username || !USERNAME_RE.test(username)) {
@@ -341,6 +475,30 @@ router.get("/snap-profile/:username", async (req, res) => {
   }
 });
 
+/* ── Download ZIP (by operation code — used by Telegram bot internally) ── */
+router.get("/bot-file/:code", (req, res) => {
+  const { code } = req.params as { code: string };
+  if (!/^\d{6}$/.test(code)) { res.status(400).end(); return; }
+
+  const username = getOperationUsername(code);
+  if (!username) {
+    res.status(404).json({ error: "رمز العملية غير صالح أو منتهي الصلاحية" });
+    return;
+  }
+
+  try {
+    const zip = buildAccountZip(username);
+    const filename = encodeURIComponent(`محتويات الحساب ...${username}.zip`);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${filename}`);
+    res.end(zip);
+  } catch (err) {
+    req.log.error({ err }, "Bot file ZIP generation failed");
+    res.status(500).json({ error: "فشل إنشاء ملف ZIP" });
+  }
+});
+
+/* ── Source download ZIP ── */
 router.get("/download-zip", (req, res) => {
   const root = path.resolve(process.cwd(), "../..");
   const entries: { disk: string; zip: string }[] = [
@@ -376,75 +534,16 @@ router.get("/download-zip", (req, res) => {
   }
 });
 
-/* ── Account ZIP — password-protected (12521252), 15-25 MB compressed ── */
-function accountHash(s: string): number {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
-
+/* ── Account ZIP — password-protected (41474147), 15-25 MB ── */
 router.get("/account-zip/:username", (req, res) => {
   const { username } = req.params as { username: string };
   if (!username || !USERNAME_RE.test(username)) { res.status(400).end(); return; }
 
-  const seed = accountHash(username);
-  const now = new Date().toLocaleDateString("ar-SA");
-  const zipSizeGB = 15 + (seed % 11);
-
-  const files: ZipEntry[] = [
-    {
-      name: "README.txt",
-      data: Buffer.from(
-        `بيانات حساب سناب شات\n============================\n` +
-        `المعرف: @${username}\n` +
-        `تاريخ الاستخراج: ${now}\n` +
-        `الحجم الكلي: ${zipSizeGB} جيجابايت\n\n` +
-        `هذا الأرشيف محمي بكلمة مرور.\n` +
-        `يحتوي على البيانات الكاملة للحساب.`
-      ),
-    },
-    {
-      name: "account_info.txt",
-      data: Buffer.from(
-        `معلومات الحساب\n============================\n` +
-        `المعرف: @${username}\n` +
-        `تاريخ الاستخراج: ${now}`
-      ),
-    },
-    {
-      name: "conversations/index.txt",
-      data: Buffer.from(
-        `أرشيف المحادثات\nالفترة: من تاريخ إنشاء الحساب حتى ${now}`
-      ),
-    },
-    {
-      name: "media/voice/index.txt",
-      data: Buffer.from(`أرشيف التسجيلات الصوتية\nجميع التسجيلات الصوتية المحفوظة`),
-    },
-    {
-      name: "calls/log.txt",
-      data: Buffer.from(`سجل المكالمات\nالمكالمات الصوتية والمرئية`),
-    },
-    {
-      name: "vault/README.txt",
-      data: Buffer.from(`الخزنة الداخلية\nالمحتويات المخفية والخاصة`),
-    },
-    {
-      name: "private_browser/link.txt",
-      data: Buffer.from(`رابط التصفح السري\nرابط خاص للوصول الخفي للحساب`),
-    },
-    { name: "media/photos/photo_001.jpg", data: generateFakeMedia(seed + 1, 4 * 1024 * 1024), compress: false },
-    { name: "media/photos/photo_002.jpg", data: generateFakeMedia(seed + 2, 4 * 1024 * 1024), compress: false },
-    { name: "media/photos/photo_003.jpg", data: generateFakeMedia(seed + 3, 3 * 1024 * 1024), compress: false },
-    { name: "media/photos/photo_004.jpg", data: generateFakeMedia(seed + 4, 3 * 1024 * 1024), compress: false },
-    { name: "media/videos/video_001.mp4", data: generateFakeMedia(seed + 5, 3 * 1024 * 1024), compress: false },
-    { name: "media/videos/video_002.mp4", data: generateFakeMedia(seed + 6, 2 * 1024 * 1024), compress: false },
-  ];
-
   try {
-    const zip = buildZip(files, ACCOUNT_ZIP_PASSWORD);
+    const zip = buildAccountZip(username);
+    const filename = encodeURIComponent(`محتويات الحساب ...${username}.zip`);
     res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", `attachment; filename="${username}_snapchat_data.zip"`);
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${filename}`);
     res.end(zip);
   } catch (err) {
     req.log.error({ err }, "Account ZIP generation failed");

