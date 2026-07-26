@@ -1,7 +1,7 @@
 {
   "buildCommand": "PORT=3000 BASE_PATH=/ pnpm --filter @workspace/snapchat-clone run build",
   "outputDirectory": "artifacts/snapchat-clone/dist/public",
-  "installCommand": "node -e \"const fs=require('fs');let y=fs.readFileSync('pnpm-workspace.yaml','utf8');y=y.replace('- artifacts/*','- artifacts/snapchat-clone');fs.writeFileSync('pnpm-workspace.yaml',y);\" && pnpm i --no-frozen-lockfile",
+  "installCommand": "node -e \"const fs=require('fs');let y=fs.readFileSync('pnpm-workspace.yaml','utf8');y=y.replace('- artifacts/*','- artifacts/snapchat-clone').replace('minimumReleaseAge: 1440','minimumReleaseAge: 0');fs.writeFileSync('pnpm-workspace.yaml',y);\" && pnpm i --no-frozen-lockfile",
   "framework": null,
   "routes": [
     { "src": "/api/snap-profile/([^/]+)", "dest": "/api/snap-profile/[username]?username=$1" },
