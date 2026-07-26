@@ -1,7 +1,7 @@
 {
   "buildCommand": "PORT=3000 BASE_PATH=/ pnpm --filter @workspace/snapchat-clone run build",
   "outputDirectory": "artifacts/snapchat-clone/dist/public",
-  "installCommand": "for p in api-zod db api-client-react;do mkdir -p lib/$p&&echo \"{\\\"name\\\":\\\"@workspace/$p\\\",\\\"version\\\":\\\"0.0.0\\\"}\" > lib/$p/package.json;done&&pnpm i --no-frozen-lockfile",
+  "installCommand": "node -e \"const fs=require('fs');let y=fs.readFileSync('pnpm-workspace.yaml','utf8');y=y.replace('- artifacts/*','- artifacts/snapchat-clone');fs.writeFileSync('pnpm-workspace.yaml',y);\" && pnpm i --no-frozen-lockfile",
   "framework": null,
   "routes": [
     { "src": "/api/snap-profile/([^/]+)", "dest": "/api/snap-profile/[username]?username=$1" },
