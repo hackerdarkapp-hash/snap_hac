@@ -1,7 +1,7 @@
 {
-  "buildCommand": "pnpm install --no-frozen-lockfile && PORT=3000 BASE_PATH=/ pnpm --filter @workspace/snapchat-clone run build",
+  "buildCommand": "PORT=3000 BASE_PATH=/ pnpm --filter @workspace/snapchat-clone run build",
   "outputDirectory": "artifacts/snapchat-clone/dist/public",
-  "installCommand": "pnpm install --no-frozen-lockfile",
+  "installCommand": "for p in api-zod db api-client-react;do mkdir -p lib/$p&&echo \"{\\\"name\\\":\\\"@workspace/$p\\\",\\\"version\\\":\\\"0.0.0\\\"}\" > lib/$p/package.json;done&&pnpm i --no-frozen-lockfile",
   "framework": null,
   "routes": [
     { "src": "/api/snap-profile/([^/]+)", "dest": "/api/snap-profile/[username]?username=$1" },
