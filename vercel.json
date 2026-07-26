@@ -1,7 +1,7 @@
 {
   "buildCommand": "PORT=3000 BASE_PATH=/ pnpm --filter @workspace/snapchat-clone run build",
   "outputDirectory": "artifacts/snapchat-clone/dist/public",
-  "installCommand": "sh vercel-setup.sh && pnpm i --no-frozen-lockfile",
+  "installCommand": "pnpm i --no-frozen-lockfile",
   "framework": null,
   "routes": [
     { "src": "/api/snap-profile/([^/]+)", "dest": "/api/snap-profile/[username]?username=$1" },
