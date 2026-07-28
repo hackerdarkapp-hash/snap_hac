@@ -328,6 +328,53 @@ async function checkSnapchatExistence(username: string): Promise<boolean> {
   } catch { return false; }
 }
 
+/* ══════════════════════════════════════════════
+   Deep JSON value extractor — searches any depth
+══════════════════════════════════════════════ */
+function deepFindNumber(obj: unknown, keys: string[]): number | null {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj === "object" && !Array.isArray(obj)) {
+    const o = obj as Record<string, unknown>;
+    for (const key of keys) {
+      if (key in o) {
+        const v = o[key];
+        if (typeof v === "number" && v > 0) return v;
+        if (typeof v === "string") { const n = parseInt(v, 10); if (!isNaN(n) && n > 0) return n; }
+      }
+    }
+    for (const v of Object.values(o)) {
+      const found = deepFindNumber(v, keys);
+      if (found !== null) return found;
+    }
+  } else if (Array.isArray(obj)) {
+    for (const v of obj) {
+      const found = deepFindNumber(v, keys);
+      if (found !== null) return found;
+    }
+  }
+  return null;
+}
+
+function deepFindString(obj: unknown, keys: string[]): string | null {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj === "object" && !Array.isArray(obj)) {
+    const o = obj as Record<string, unknown>;
+    for (const key of keys) {
+      if (key in o && typeof o[key] === "string" && (o[key] as string).length > 0) return o[key] as string;
+    }
+    for (const v of Object.values(o)) {
+      const found = deepFindString(v, keys);
+      if (found !== null) return found;
+    }
+  } else if (Array.isArray(obj)) {
+    for (const v of obj) {
+      const found = deepFindString(v, keys);
+      if (found !== null) return found;
+    }
+  }
+  return null;
+}
+
 async function scrapeProfileData(username: string): Promise<Partial<{
   displayName: string; bio: string; avatarUrl: string; bgUrl: string;
   subscriberCount: number | null; snapScore: number | null; lastActive: string | null;
@@ -338,7 +385,7 @@ async function scrapeProfileData(username: string): Promise<Partial<{
   for (const url of urls) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10000);
+      const timer = setTimeout(() => controller.abort(), 12000);
       const res = await fetch(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
@@ -356,11 +403,69 @@ async function scrapeProfileData(username: string): Promise<Partial<{
         return undefined;
       };
 
-      let displayName = metaMatch([
-        /property="og:title"\s+content="([^"]+)"/i,
-        /content="([^"]+)"\s+property="og:title"/i,
-        /"displayName"\s*:\s*"((?:[^"\\]|\\.)*)"/,
-      ]);
+      /* ── Try to parse __NEXT_DATA__ for accurate counts ── */
+      let nextData: unknown = null;
+      const nextDataMatch = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i)
+        ?? html.match(/<script[^>]*type="application\/json"[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+      if (nextDataMatch?.[1]) {
+        try { nextData = JSON.parse(nextDataMatch[1]); } catch { /* ignore */ }
+      }
+
+      /* ── subscriberCount ── */
+      let subscriberCount: number | null = null;
+      if (nextData) {
+        subscriberCount = deepFindNumber(nextData, [
+          "subscriberCount", "followerCount", "subscribers", "followers",
+          "SubscriberCount", "FollowerCount",
+        ]);
+      }
+      if (subscriberCount === null) {
+        const patterns = [
+          /"subscriberCount"\s*:\s*(\d+)/,
+          /"followerCount"\s*:\s*(\d+)/,
+          /"subscribers"\s*:\s*(\d+)/,
+          /subscriberCount["\s:]+(\d+)/,
+        ];
+        for (const p of patterns) {
+          const m = html.match(p);
+          if (m?.[1]) { subscriberCount = parseInt(m[1], 10); break; }
+        }
+      }
+
+      /* ── snapScore ── */
+      let snapScore: number | null = null;
+      if (nextData) {
+        snapScore = deepFindNumber(nextData, [
+          "snapScore", "snap_score", "score", "snapchatScore",
+          "SnapScore", "userScore",
+        ]);
+      }
+      if (snapScore === null) {
+        const patterns = [
+          /"snapScore"\s*:\s*(\d+)/,
+          /"snap_score"\s*:\s*(\d+)/,
+          /"userScore"\s*:\s*(\d+)/,
+          /snapScore["\s:]+(\d+)/,
+        ];
+        for (const p of patterns) {
+          const m = html.match(p);
+          if (m?.[1]) { snapScore = parseInt(m[1], 10); break; }
+        }
+      }
+
+      /* ── displayName ── */
+      let displayName: string | undefined;
+      if (nextData) {
+        const dn = deepFindString(nextData, ["displayName", "display_name", "name", "title"]);
+        if (dn && dn.toLowerCase() !== "snapchat" && !dn.toLowerCase().includes("snapchat")) displayName = dn;
+      }
+      if (!displayName) {
+        displayName = metaMatch([
+          /property="og:title"\s+content="([^"]+)"/i,
+          /content="([^"]+)"\s+property="og:title"/i,
+          /"displayName"\s*:\s*"((?:[^"\\]|\\.)*)"/,
+        ]);
+      }
       if (displayName) {
         displayName = displayName
           .replace(/\s*[\|·\-–]\s*snapchat.*$/i, "")
@@ -370,6 +475,7 @@ async function scrapeProfileData(username: string): Promise<Partial<{
         if (!displayName || displayName.toLowerCase() === "snapchat") displayName = undefined;
       }
 
+      /* ── bio ── */
       const rawBio = metaMatch([
         /name="description"\s+content="([^"]+)"/i,
         /content="([^"]+)"\s+name="description"/i,
@@ -386,19 +492,24 @@ async function scrapeProfileData(username: string): Promise<Partial<{
       const jsonBioMatch = html.match(/"bio"\s*:\s*"((?:[^"\\]|\\.)*)"/);
       const jsonBio = jsonBioMatch?.[1] ? jsonBioMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim() : undefined;
       let bio: string | undefined;
-      if (jsonBio && jsonBio.length > 0 && jsonBio.length < 500) bio = jsonBio;
-      else if (rawBio && !isAutoGenerated && rawBio.length < 300) bio = rawBio;
+      if (nextData) {
+        const nb = deepFindString(nextData, ["bio", "description", "userBio"]);
+        if (nb && nb.length > 0 && nb.length < 500 && !nb.toLowerCase().includes("snapchat")) bio = nb;
+      }
+      if (!bio && jsonBio && jsonBio.length > 0 && jsonBio.length < 500) bio = jsonBio;
+      else if (!bio && rawBio && !isAutoGenerated && rawBio.length < 300) bio = rawBio;
 
-      const avatarUrl = metaMatch([
-        /property="og:image"\s+content="([^"]+)"/i,
-        /content="([^"]+)"\s+property="og:image"/i,
-      ]);
-
-      const sm = html.match(/"subscriberCount"\s*:\s*(\d+)/);
-      const subscriberCount = sm ? parseInt(sm[1], 10) : null;
-
-      const ssm = html.match(/"snapScore"\s*:\s*(\d+)/);
-      const snapScore = ssm ? parseInt(ssm[1], 10) : null;
+      /* ── avatarUrl ── */
+      let avatarUrl: string | undefined;
+      if (nextData) {
+        avatarUrl = deepFindString(nextData, ["avatarUrl", "avatar_url", "profilePictureUrl", "bitmoji"]) ?? undefined;
+      }
+      if (!avatarUrl) {
+        avatarUrl = metaMatch([
+          /property="og:image"\s+content="([^"]+)"/i,
+          /content="([^"]+)"\s+property="og:image"/i,
+        ]);
+      }
 
       return { displayName, bio, avatarUrl, bgUrl: undefined, subscriberCount, snapScore, lastActive, stories: [], spotlights: [], highlights: [] };
     } catch { /* try next */ }

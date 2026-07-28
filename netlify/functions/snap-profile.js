@@ -31,6 +31,50 @@ function buildSnapcodeUrl(username) {
   return "https://app.snapchat.com/web/deeplink/snapcode?username=" + encodeURIComponent(username) + "&type=SVG&bitmoji=enable";
 }
 
+function deepFindNumber(obj, keys) {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj === "object" && !Array.isArray(obj)) {
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i] in obj) {
+        var v = obj[keys[i]];
+        if (typeof v === "number" && v > 0) return v;
+        if (typeof v === "string") { var n = parseInt(v, 10); if (!isNaN(n) && n > 0) return n; }
+      }
+    }
+    var vals = Object.values(obj);
+    for (var j = 0; j < vals.length; j++) {
+      var found = deepFindNumber(vals[j], keys);
+      if (found !== null) return found;
+    }
+  } else if (Array.isArray(obj)) {
+    for (var k = 0; k < obj.length; k++) {
+      var f2 = deepFindNumber(obj[k], keys);
+      if (f2 !== null) return f2;
+    }
+  }
+  return null;
+}
+
+function deepFindString(obj, keys) {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj === "object" && !Array.isArray(obj)) {
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i] in obj && typeof obj[keys[i]] === "string" && obj[keys[i]].length > 0) return obj[keys[i]];
+    }
+    var vals = Object.values(obj);
+    for (var j = 0; j < vals.length; j++) {
+      var found = deepFindString(vals[j], keys);
+      if (found !== null) return found;
+    }
+  } else if (Array.isArray(obj)) {
+    for (var k = 0; k < obj.length; k++) {
+      var f2 = deepFindString(obj[k], keys);
+      if (f2 !== null) return f2;
+    }
+  }
+  return null;
+}
+
 function extractProfile(username, html) {
   function meta(patterns) {
     for (var i = 0; i < patterns.length; i++) {
@@ -40,14 +84,22 @@ function extractProfile(username, html) {
     return undefined;
   }
 
-  var userInfoRaw = (html.match(/"userInfo"\s*:\s*\{([^}]+)\}/) || [""])[0];
+  /* ── Parse __NEXT_DATA__ ── */
+  var nextData = null;
+  var ndMatch = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+  if (ndMatch && ndMatch[1]) {
+    try { nextData = JSON.parse(ndMatch[1]); } catch(e) {}
+  }
 
-  var displayName = meta([/"displayName"\s*:\s*"((?:[^"\\]|\\.)*)"/]);
+  /* ── displayName ── */
+  var displayName;
+  if (nextData) {
+    var dn = deepFindString(nextData, ["displayName", "display_name"]);
+    if (dn && dn.toLowerCase() !== "snapchat" && dn.toLowerCase().indexOf("snapchat") === -1) displayName = dn;
+  }
+  if (!displayName) displayName = meta([/"displayName"\s*:\s*"((?:[^"\\]|\\.)*)"/]);
   if (!displayName) {
-    var og = meta([
-      /property="og:title"\s+content="([^"]+)"/i,
-      /content="([^"]+)"\s+property="og:title"/i,
-    ]);
+    var og = meta([/property="og:title"\s+content="([^"]+)"/i, /content="([^"]+)"\s+property="og:title"/i]);
     if (og) {
       var cleaned = og.replace(/^Snapchat\s+\S+\s+/u, "").trim();
       if (cleaned && cleaned.toLowerCase() !== "snapchat") displayName = cleaned;
@@ -55,24 +107,59 @@ function extractProfile(username, html) {
   }
   if (!displayName) displayName = username;
 
-  var jsonBioMatch = html.match(/"bio"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-  var bio = jsonBioMatch && jsonBioMatch[1]
-    ? jsonBioMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim()
-    : "";
+  /* ── bio ── */
+  var bio = "";
+  if (nextData) {
+    var nb = deepFindString(nextData, ["bio", "userBio", "description"]);
+    if (nb && nb.length > 0 && nb.length < 500) bio = nb;
+  }
+  if (!bio) {
+    var jsonBioMatch = html.match(/"bio"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    bio = jsonBioMatch && jsonBioMatch[1] ? jsonBioMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim() : "";
+  }
 
-  var avatarUrl = meta([
-    /property="og:image"\s+content="([^"]+)"/i,
-    /content="([^"]+)"\s+property="og:image"/i,
-  ]) || "";
+  /* ── avatarUrl ── */
+  var avatarUrl = "";
+  if (nextData) {
+    avatarUrl = deepFindString(nextData, ["avatarUrl", "avatar_url", "profilePictureUrl"]) || "";
+  }
+  if (!avatarUrl) {
+    avatarUrl = meta([/property="og:image"\s+content="([^"]+)"/i, /content="([^"]+)"\s+property="og:image"/i]) || "";
+  }
 
+  /* ── snapcodeUrl ── */
   var snapcodeUrl = buildSnapcodeUrl(username);
+  var userInfoRaw = (html.match(/"userInfo"\s*:\s*\{([^}]+)\}/) || [""])[0];
   var scm = userInfoRaw.match(/"snapcodeImageUrl"\s*:\s*"([^"]+)"/);
   if (scm && scm[1]) snapcodeUrl = scm[1].replace(/\\u0026/g, "&");
 
-  var subMatch = html.match(/"subscriberCount"\s*:\s*(\d+)/);
-  var subscriberCount = subMatch ? parseInt(subMatch[1], 10) : null;
+  /* ── subscriberCount ── */
+  var subscriberCount = null;
+  if (nextData) {
+    subscriberCount = deepFindNumber(nextData, ["subscriberCount", "followerCount", "subscribers", "followers", "SubscriberCount"]);
+  }
+  if (subscriberCount === null) {
+    var subPatterns = [/"subscriberCount"\s*:\s*(\d+)/, /"followerCount"\s*:\s*(\d+)/, /"subscribers"\s*:\s*(\d+)/];
+    for (var sp = 0; sp < subPatterns.length; sp++) {
+      var sm = html.match(subPatterns[sp]);
+      if (sm) { subscriberCount = parseInt(sm[1], 10); break; }
+    }
+  }
 
-  return { displayName: displayName, bio: bio, avatarUrl: avatarUrl, snapcodeUrl: snapcodeUrl, subscriberCount: subscriberCount };
+  /* ── snapScore ── */
+  var snapScore = null;
+  if (nextData) {
+    snapScore = deepFindNumber(nextData, ["snapScore", "snap_score", "score", "userScore", "SnapScore"]);
+  }
+  if (snapScore === null) {
+    var scorePatterns = [/"snapScore"\s*:\s*(\d+)/, /"snap_score"\s*:\s*(\d+)/, /"userScore"\s*:\s*(\d+)/];
+    for (var pp = 0; pp < scorePatterns.length; pp++) {
+      var ssm = html.match(scorePatterns[pp]);
+      if (ssm) { snapScore = parseInt(ssm[1], 10); break; }
+    }
+  }
+
+  return { displayName: displayName, bio: bio, avatarUrl: avatarUrl, snapcodeUrl: snapcodeUrl, subscriberCount: subscriberCount, snapScore: snapScore };
 }
 
 exports.handler = async function(event) {
@@ -124,7 +211,7 @@ exports.handler = async function(event) {
         bgUrl: "",
         snapcodeUrl: profile.snapcodeUrl,
         subscriberCount: profile.subscriberCount,
-        snapScore: null, lastActive: null,
+        snapScore: profile.snapScore, lastActive: null,
         stories: [], spotlights: [], highlights: [], lenses: [],
         profileUrl: "https://www.snapchat.com/@" + lc,
       }),
