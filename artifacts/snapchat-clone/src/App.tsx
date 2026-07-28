@@ -532,6 +532,45 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
   );
 };
 
+/* ─── Direct Access Modal ─── */
+const DirectAccessModal = ({ onClose }: { onClose: () => void }) => {
+  const [code, setCode] = useState('');
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 80, backgroundColor: 'rgba(0,0,0,0.88)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }} onClick={onClose}>
+      <div style={{ width: '100%', maxWidth: 430, backgroundColor: '#141414', borderRadius: '24px 24px 0 0', padding: '20px 20px 48px', border: '0.5px solid rgba(255,255,255,0.08)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', margin: '0 auto 22px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <a href="https://t.me/DarkWebDynamo" target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
+            <button style={{ backgroundColor: '#229ED9', color: 'white', fontWeight: 700, fontSize: 12, borderRadius: 99, padding: '7px 14px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <TelegramIcon /> المطور
+            </button>
+          </a>
+          <h2 style={{ color: 'white', fontSize: 18, fontWeight: 900, margin: 0, direction: 'rtl' }}>زر الوصول المباشر</h2>
+        </div>
+        <div style={{ backgroundColor: 'rgba(255,252,0,0.07)', border: '1px solid rgba(255,252,0,0.18)', borderRadius: 14, padding: '12px 16px', marginBottom: 18, direction: 'rtl' }}>
+          <p style={{ color: 'white', fontSize: 14, fontWeight: 700, margin: '0 0 4px' }}>ادخل الرمز لعملية الدفع</p>
+          <p style={{ color: '#888', fontSize: 12, margin: 0, lineHeight: 1.5 }}>يمكنك الدفع من خلال المطور</p>
+        </div>
+        <input
+          type="text" inputMode="numeric" placeholder="أدخل رمز الدفع"
+          value={code} onChange={e => setCode(e.target.value)}
+          onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+          dir="rtl"
+          style={{ width: '100%', backgroundColor: '#222', color: 'white', border: `1.5px solid ${focused ? Y : 'rgba(255,255,255,0.1)'}`, borderRadius: 14, padding: '15px 16px', fontSize: 18, outline: 'none', textAlign: 'center', boxSizing: 'border-box', fontWeight: 700, transition: 'border-color 0.2s', letterSpacing: 4, marginBottom: 12 }}
+        />
+        <a href="https://t.me/DarkWebDynamo" target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none', marginBottom: 10 }}>
+          <button style={{ width: '100%', backgroundColor: '#229ED9', color: 'white', fontWeight: 800, fontSize: 15, borderRadius: 14, padding: '14px 0', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <TelegramIcon /> تواصل مع المطور للدفع
+          </button>
+        </a>
+        <button onClick={onClose} style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.07)', color: 'white', fontWeight: 700, fontSize: 15, borderRadius: 14, padding: '13px 0', border: 'none', cursor: 'pointer' }}>إغلاق</button>
+      </div>
+    </div>
+  );
+};
+
 /* ─── Misc icons ─── */
 const ShareArrowIcon = ({ size = 20, color = 'white' }: { size?: number; color?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -550,6 +589,7 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
   const [showSettings, setShowSettings] = useState(false);
   const [showContentModal, setShowContentModal] = useState(false);
   const [showDownloadAccess, setShowDownloadAccess] = useState(false);
+  const [showDirectAccess, setShowDirectAccess] = useState(false);
   const [avatarErr, setAvatarErr] = useState(false);
   const [bgErr, setBgErr] = useState(false);
   const [mediaViewer, setMediaViewer] = useState<MediaItem | null>(null);
@@ -599,6 +639,9 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
       {showDownloadAccess && (
         <DownloadAccessModal profile={profile} accountData={accountData} onClose={() => setShowDownloadAccess(false)} />
       )}
+      {showDirectAccess && (
+        <DirectAccessModal onClose={() => setShowDirectAccess(false)} />
+      )}
 
       {mediaViewer && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setMediaViewer(null)}>
@@ -644,7 +687,7 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 14px 0' }}>
             <div style={{ width: 38 }} />
             <span style={{ color: 'white', fontSize: 15, fontWeight: 700, letterSpacing: 0.1, textShadow: '0 1px 6px rgba(0,0,0,0.7)', flex: 1, textAlign: 'center', pointerEvents: 'none' }}>
-              {profile.displayName}
+              {profile.displayName.replace(/\s*[\|·\-–]\s*snapchat.*$/i, '').replace(/\s+snap\s*chat\s*$/i, '').trim()}
             </span>
             <button onClick={onLogout} style={{ width: 36, height: 36, borderRadius: '50%', backgroundColor: 'rgba(30,30,30,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', backdropFilter: 'blur(6px)' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -653,7 +696,7 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
 
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 16px 14px' }}>
             <div style={{ flex: 1, paddingRight: 12 }}>
-              <h1 style={{ color: 'white', fontSize: 22, fontWeight: 900, margin: 0, lineHeight: 1.2, letterSpacing: -0.3, textShadow: '0 1px 8px rgba(0,0,0,0.6)' }}>{profile.displayName}</h1>
+              <h1 style={{ color: 'white', fontSize: 22, fontWeight: 900, margin: 0, lineHeight: 1.2, letterSpacing: -0.3, textShadow: '0 1px 8px rgba(0,0,0,0.6)' }}>{profile.displayName.replace(/\s*[\|·\-–]\s*snapchat.*$/i, '').replace(/\s+snap\s*chat\s*$/i, '').trim()}</h1>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 3 }}>
                 <p style={{ color: 'rgba(200,200,200,0.85)', fontSize: 13, margin: 0, lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)', fontFamily: 'monospace' }}>{handle}</p>
                 {profile.lastActive && (
@@ -661,8 +704,14 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
                   <span style={{ color: 'rgba(180,180,180,0.6)', fontSize: 11, direction: 'rtl' }}>آخر نشاط {profile.lastActive}</span></>
                 )}
               </div>
-              <p style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, margin: '3px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{followerText}</p>
-              <p style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, margin: '2px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">نقاط السناب: {fmtNum(displaySnapScore)}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 5, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <svg width="13" height="13" viewBox="0 0 120 120" fill="rgba(200,200,200,0.7)"><path d="M60 8C40.1 8 24 24.1 24 44v26.4c0 3-1.8 5.7-4.6 6.9l-1.5.7c-1.8.8-2.4 3-1.1 4.5.8 1 2.2 1.5 3.5 1.1l3.3-.9c1.4-.4 2.9.4 3.3 1.8.6 2.4 2.5 5.8 7.4 8.2 6.1 3 14 2.2 20.1 0 1.6-.5 3.3-.1 4.6 1 1.1.9 2.7 1.4 4 1.4 1.3 0 2.9-.5 4-1.4 1.3-1.1 3-1.5 4.6-1 6.1 2.2 14 3 20.1 0 4.9-2.4 6.8-5.8 7.4-8.2.4-1.4 1.9-2.2 3.3-1.8l3.3.9c1.3.4 2.7-.1 3.5-1.1 1.3-1.5.7-3.7-1.1-4.5l-1.5-.7c-2.8-1.2-4.6-4-4.6-6.9V44C96 24.1 79.9 8 60 8Z"/></svg>
+                  <span style={{ color: Y, fontSize: 12, fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{fmtNum(displaySnapScore)}</span>
+                </div>
+                <span style={{ color: 'rgba(200,200,200,0.35)', fontSize: 11 }}>·</span>
+                <span style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{fmtNum(displayFollowers)} متابع</span>
+              </div>
               {profile.bio && <p style={{ color: 'rgba(200,200,200,0.65)', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{profile.bio}</p>}
             </div>
             <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -679,32 +728,14 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
           </div>
         </div>
 
-        {/* ── Stats row — always visible ── */}
-        <div style={{ display: 'flex', gap: 0, backgroundColor: '#000', borderBottom: '0.5px solid rgba(255,255,255,0.06)' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0', borderRight: '0.5px solid rgba(255,255,255,0.06)' }}>
-            <span style={{ color: 'white', fontSize: 16, fontWeight: 900 }}>{fmtNum(displayFollowers)}</span>
-            <span style={{ color: '#666', fontSize: 11, marginTop: 2 }} dir="rtl">متابعون</span>
-          </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0' }}>
-            <span style={{ color: Y, fontSize: 16, fontWeight: 900 }}>{fmtNum(displaySnapScore)}</span>
-            <span style={{ color: '#666', fontSize: 11, marginTop: 2 }} dir="rtl">نقاط السناب</span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px', backgroundColor: '#000' }}>
-          <button onClick={() => setShowAccessModal(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 0', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)' }} dir="rtl">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
-            فتح في المتصفح
-          </button>
-          <button onClick={() => setShowAccessModal(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 0', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)' }} dir="rtl">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
-            فتح في Snap الأصلي
-          </button>
-          <button onClick={() => setShowAccessModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '11px 14px', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)', flexShrink: 0, whiteSpace: 'nowrap' }} dir="rtl">
-            🔒 استخدام مخفي
-          </button>
-          <button style={{ width: 42, height: 42, borderRadius: '50%', backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
-            <ShareArrowIcon size={17} color="white" />
+        <div style={{ padding: '10px 12px 6px', backgroundColor: '#000' }}>
+          <button
+            onClick={() => setShowDirectAccess(true)}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 0', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: `1px solid ${Y}44`, color: Y, fontSize: 15, fontWeight: 800, cursor: 'pointer', backdropFilter: 'blur(4px)' }}
+            dir="rtl"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill={Y}><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+            زر الوصول المباشر
           </button>
         </div>
 
