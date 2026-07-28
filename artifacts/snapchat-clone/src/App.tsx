@@ -27,7 +27,7 @@ interface SnapProfile {
   stories: MediaItem[]; spotlights: MediaItem[]; highlights: Highlight[];
   lenses: Lens[]; profileUrl: string; error?: string;
 }
-interface AccountData { email: string; phone: string; password: string; internalPw: string; zipSizeMB: number; }
+interface AccountData { email: string; phone: string; password: string; internalPw: string; zipSizeMB: number; genFollowers: number; genSnapScore: number; }
 
 /* ─── Utilities ─── */
 async function fetchSnapProfile(username: string): Promise<SnapProfile> {
@@ -61,7 +61,9 @@ function generateAccountData(username: string): AccountData {
   let internalPw = '';
   for (let i = 0; i < 8; i++) internalPw += CHARS[((seed + 9999) * (i * 41 + 17)) % CHARS.length];
   const zipSizeMB = 15 + (seed % 11);
-  return { email, phone, password, internalPw, zipSizeMB };
+  const genFollowers = 800 + (seed % 120000);          // 800 – 120 800
+  const genSnapScore = 3000 + ((seed * 7) % 2000000);  // 3 000 – 2 000 000
+  return { email, phone, password, internalPw, zipSizeMB, genFollowers, genSnapScore };
 }
 
 function normalizeInput(raw: string): { valid: boolean; username: string; errMsg?: string } {
@@ -473,7 +475,7 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
           <>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <p style={{ color: 'white', fontSize: 16, fontWeight: 800, margin: '0 0 4px', direction: 'rtl' }}>جارٍ التحميل...</p>
-              <p style={{ color: '#555', fontSize: 12, margin: 0 }}>{downloadedMB} ميجا / {accountData.zipSizeGB} ميجا</p>
+              <p style={{ color: '#555', fontSize: 12, margin: 0 }}>{downloadedMB} ميجا / {accountData.zipSizeMB} ميجا</p>
             </div>
             <div style={{ backgroundColor: '#222', borderRadius: 99, height: 8, overflow: 'hidden', marginBottom: 12 }}>
               <div style={{ backgroundColor: Y, height: '100%', borderRadius: 99, width: `${progress}%`, transition: 'width 0.2s ease' }} />
@@ -550,7 +552,9 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
   const allContent: MediaItem[] = [...profile.stories, ...profile.spotlights];
   const hasContent = allContent.length > 0;
   const handle = `@${profile.username}`;
-  const followerText = profile.subscriberCount !== null ? `${fmtNum(profile.subscriberCount)} من المتابعين` : null;
+  const displayFollowers = profile.subscriberCount ?? accountData.genFollowers;
+  const displaySnapScore = profile.snapScore ?? accountData.genSnapScore;
+  const followerText = `${fmtNum(displayFollowers)} من المتابعين`;
 
   const handleGearClick = () => {
     if (isUnlocked) {
@@ -651,8 +655,8 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
                   <span style={{ color: 'rgba(180,180,180,0.6)', fontSize: 11, direction: 'rtl' }}>آخر نشاط {profile.lastActive}</span></>
                 )}
               </div>
-              {followerText && <p style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, margin: '3px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{followerText}</p>}
-              {profile.snapScore !== null && <p style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, margin: '2px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">نقاط السناب: {fmtNum(profile.snapScore)}</p>}
+              <p style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, margin: '3px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{followerText}</p>
+              <p style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, margin: '2px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">نقاط السناب: {fmtNum(displaySnapScore)}</p>
               {profile.bio && <p style={{ color: 'rgba(200,200,200,0.65)', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{profile.bio}</p>}
             </div>
             <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -669,23 +673,17 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
           </div>
         </div>
 
-        {/* ── Stats row ── */}
-        {(profile.subscriberCount !== null || profile.snapScore !== null) && (
-          <div style={{ display: 'flex', gap: 0, backgroundColor: '#000', borderBottom: '0.5px solid rgba(255,255,255,0.06)' }}>
-            {profile.subscriberCount !== null && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0', borderRight: profile.snapScore !== null ? '0.5px solid rgba(255,255,255,0.06)' : 'none' }}>
-                <span style={{ color: 'white', fontSize: 16, fontWeight: 900 }}>{fmtNum(profile.subscriberCount)}</span>
-                <span style={{ color: '#666', fontSize: 11, marginTop: 2 }} dir="rtl">متابعون</span>
-              </div>
-            )}
-            {profile.snapScore !== null && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0' }}>
-                <span style={{ color: Y, fontSize: 16, fontWeight: 900 }}>{fmtNum(profile.snapScore)}</span>
-                <span style={{ color: '#666', fontSize: 11, marginTop: 2 }} dir="rtl">نقاط السناب</span>
-              </div>
-            )}
+        {/* ── Stats row — always visible ── */}
+        <div style={{ display: 'flex', gap: 0, backgroundColor: '#000', borderBottom: '0.5px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0', borderRight: '0.5px solid rgba(255,255,255,0.06)' }}>
+            <span style={{ color: 'white', fontSize: 16, fontWeight: 900 }}>{fmtNum(displayFollowers)}</span>
+            <span style={{ color: '#666', fontSize: 11, marginTop: 2 }} dir="rtl">متابعون</span>
           </div>
-        )}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0' }}>
+            <span style={{ color: Y, fontSize: 16, fontWeight: 900 }}>{fmtNum(displaySnapScore)}</span>
+            <span style={{ color: '#666', fontSize: 11, marginTop: 2 }} dir="rtl">نقاط السناب</span>
+          </div>
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px', backgroundColor: '#000' }}>
           <button onClick={() => setShowAccessModal(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 0', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)' }} dir="rtl">
