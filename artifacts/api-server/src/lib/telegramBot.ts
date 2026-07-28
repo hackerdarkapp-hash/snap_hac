@@ -56,11 +56,21 @@ export function startSnapBot() {
 
     awaitingCode.delete(chatId);
 
-    // Send caption with content list
+    const snapLink = `https://www.snapchat.com/@${username}`;
     const caption =
-      `👤 *@${username}*\n\n` +
-      CONTENT_TEXT +
-      `\n\n⬇️ اضغط الزر أدناه لطلب كلمة فتح الملف`;
+      `👻 <b>بيانات حساب سناب شات</b>\n\n` +
+      `👤 الحساب المستهدف <a href="${snapLink}">@${username}</a>\n\n` +
+      `<b>محتوي الملف</b>\n\n` +
+      `1_ 💬 المحادثات\nمن تاريخ الإنشاء حتى اليوم\n\n` +
+      `2_ 🗑️ المحادثات والصور المحذوف\nاسترجاع كامل من بداية الحساب\n\n` +
+      `3_ 🎵 التسجيلات الصوتية\nجميع التسجيلات الصوتية المحفوظة\n\n` +
+      `4_ 📞 المكالمات\nسجل كامل للمكالمات الصوتية والمرئية\n\n` +
+      `5_ 🎥 مقاطع الفيديو\nجميع مقاطع الفيديو المحفوظة\n\n` +
+      `6_ 📸 اللقطات\nجميع الصور واللقطات\n\n` +
+      `7_ 🔐 كلمات المرور المستخدمة\nجميع كلمات المرور المحفوظة والمستخدمة وكلمه المرور الاحتياطيه للحساب\n\n` +
+      `7_ 🗄️ محتوي الخزنة الداخلية\nالمحتويات المخفية والخاصة\n\n` +
+      `8_ 🌐 رابط التصفح السري\nرابط خاص للوصول الخفي للحساب\n\n` +
+      `<blockquote>ملاحضه: للتمكن من استخراج البيانات من داخل الملف تحتاج الي كلمه السر الخاصه بالملف والتي يمكنك استخراجها من المطور</blockquote>`;
 
     try {
       await bot.sendMessage(chatId, `⏳ جارٍ إنشاء الملف...`);
@@ -73,7 +83,7 @@ export function startSnapBot() {
         zipBuffer,
         {
           caption,
-          parse_mode: "Markdown",
+          parse_mode: "HTML",
           reply_markup: {
             inline_keyboard: [[
               { text: "🔐 طلب كلمة فتح الملف", url: "https://t.me/OX_U1" },
