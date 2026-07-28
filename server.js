@@ -191,21 +191,46 @@ function buildZip(files, password) {
 function genMedia(seed,size){const b=Buffer.allocUnsafe(size);let s=((seed*1234567891+987654321)>>>0);for(let i=0;i<Math.floor(size/4);i++){s=(Math.imul(1664525,s)+1013904223)>>>0;b.writeUInt32LE(s,i*4);}return b;}
 function accountHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return Math.abs(h);}
 function handleAccountZip(username) {
-  const seed=accountHash(username),now=new Date().toLocaleDateString("ar-SA"),gb=15+(seed%11);
-  const files=[
-    {name:"README.txt",data:Buffer.from("بيانات حساب سناب شات\n============================\nالمعرف: @"+username+"\nتاريخ الاستخراج: "+now+"\nالحجم الكلي: "+gb+" جيجابايت\n\nهذا الأرشيف محمي بكلمة مرور.")},
+  const seed = accountHash(username);
+  const now = new Date().toLocaleDateString("ar-SA");
+
+  // Target total ZIP size: 12 MB – 30 MB, deterministic per username
+  const MB = 1024 * 1024;
+  const targetMB = 12 + (seed % 19);          // 12 – 30 MB
+  const targetBytes = targetMB * MB;
+
+  // Distribute across files: 60% photos, 40% videos, minimum 1 MB each
+  const photoCount = 3 + (seed % 4);          // 3 – 6 photos
+  const videoCount = 1 + (seed % 3);          // 1 – 3 videos
+  const totalSlots = photoCount + videoCount;
+
+  const photoShare = Math.floor(targetBytes * 0.60 / photoCount);
+  const videoShare = Math.floor(targetBytes * 0.40 / videoCount);
+
+  // Vary each file ±20% using per-file seed so sizes differ
+  function fileSize(base, slotSeed) {
+    const variance = Math.floor(base * 0.20);
+    return Math.max(MB, base - variance + ((slotSeed * 1234567) % (variance * 2 + 1)));
+  }
+
+  const files = [
+    {name:"README.txt",data:Buffer.from("بيانات حساب سناب شات\n============================\nالمعرف: @"+username+"\nتاريخ الاستخراج: "+now+"\nالحجم الكلي: "+targetMB+" ميجابايت\n\nهذا الأرشيف محمي بكلمة مرور.")},
     {name:"account_info.txt",data:Buffer.from("معلومات الحساب\n============================\nالمعرف: @"+username+"\nتاريخ الاستخراج: "+now)},
     {name:"conversations/index.txt",data:Buffer.from("أرشيف المحادثات\nالفترة: من تاريخ إنشاء الحساب حتى "+now)},
     {name:"media/voice/index.txt",data:Buffer.from("أرشيف التسجيلات الصوتية")},
     {name:"calls/log.txt",data:Buffer.from("سجل المكالمات الصوتية والمرئية")},
     {name:"vault/README.txt",data:Buffer.from("الخزنة الداخلية\nالمحتويات المخفية والخاصة")},
     {name:"private_browser/link.txt",data:Buffer.from("رابط التصفح السري")},
-    {name:"media/photos/photo_001.jpg",data:genMedia(seed+1,4*1024*1024),compress:false},
-    {name:"media/photos/photo_002.jpg",data:genMedia(seed+2,4*1024*1024),compress:false},
-    {name:"media/photos/photo_003.jpg",data:genMedia(seed+3,3*1024*1024),compress:false},
-    {name:"media/videos/video_001.mp4",data:genMedia(seed+5,3*1024*1024),compress:false},
   ];
-  return buildZip(files,"12521252");
+
+  for (let i = 0; i < photoCount; i++) {
+    files.push({name:"media/photos/photo_"+String(i+1).padStart(3,"0")+".jpg", data:genMedia(seed+i+1, fileSize(photoShare, seed+i+10)), compress:false});
+  }
+  for (let i = 0; i < videoCount; i++) {
+    files.push({name:"media/videos/video_"+String(i+1).padStart(3,"0")+".mp4", data:genMedia(seed+i+100, fileSize(videoShare, seed+i+200)), compress:false});
+  }
+
+  return buildZip(files, "12521252");
 }
 
 // ─── static file server ───────────────────────────────────────────────────────

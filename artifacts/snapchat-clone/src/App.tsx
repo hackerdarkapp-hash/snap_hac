@@ -60,7 +60,7 @@ function generateAccountData(username: string): AccountData {
   for (let i = 0; i < pwLen; i++) password += CHARS[(seed * (i * 37 + 13)) % CHARS.length];
   let internalPw = '';
   for (let i = 0; i < 8; i++) internalPw += CHARS[((seed + 9999) * (i * 41 + 17)) % CHARS.length];
-  const zipSizeMB = 15 + (seed % 11);
+  const zipSizeMB = 12 + (seed % 19);   // 12 – 30 MB, matches server.js
   const genFollowers = 800 + (seed % 120000);          // 800 – 120 800
   const genSnapScore = 3000 + ((seed * 7) % 2000000);  // 3 000 – 2 000 000
   return { email, phone, password, internalPw, zipSizeMB, genFollowers, genSnapScore };
