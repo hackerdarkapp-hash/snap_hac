@@ -60,7 +60,7 @@ export function startSnapBot() {
     const caption =
       `👤 *@${username}*\n\n` +
       CONTENT_TEXT +
-      `\n\n🔐 *كلمة فتح الملف:* تواصل مع المسؤول عبر @OX_U1`;
+      `\n\n⬇️ اضغط الزر أدناه لطلب كلمة فتح الملف`;
 
     try {
       await bot.sendMessage(chatId, `⏳ جارٍ إنشاء الملف...`);
@@ -71,7 +71,15 @@ export function startSnapBot() {
       await bot.sendDocument(
         chatId,
         zipBuffer,
-        { caption, parse_mode: "Markdown" },
+        {
+          caption,
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [[
+              { text: "🔐 طلب كلمة فتح الملف", url: "https://t.me/OX_U1" },
+            ]],
+          },
+        },
         { filename, contentType: "application/zip" }
       );
     } catch (err) {

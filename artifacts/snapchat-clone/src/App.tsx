@@ -449,7 +449,7 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
     return () => clearInterval(interval);
   }, [profile.username]);
 
-  const downloadedMB = (accountData.zipSizeGB * progress / 100).toFixed(1);
+  const downloadedMB = (accountData.zipSizeMB * progress / 100).toFixed(1);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(opCode).catch(() => {
@@ -513,12 +513,6 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
             <a href="https://t.me/jsjjdjebot" target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none', marginBottom: 8 }}>
               <button style={{ width: '100%', backgroundColor: '#229ED9', color: 'white', fontWeight: 800, fontSize: 15, borderRadius: 14, padding: '13px 0', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <TelegramIcon /> تيليجرام
-              </button>
-            </a>
-
-            <a href="https://t.me/OX_U1" target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none', marginBottom: 10 }}>
-              <button style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.06)', color: 'white', fontWeight: 700, fontSize: 14, borderRadius: 14, padding: '12px 0', border: '0.5px solid rgba(255,255,255,0.15)', cursor: 'pointer' }}>
-                🔐 طلب كلمة فتح الملف
               </button>
             </a>
 
@@ -674,6 +668,24 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
             </div>
           </div>
         </div>
+
+        {/* ── Stats row ── */}
+        {(profile.subscriberCount !== null || profile.snapScore !== null) && (
+          <div style={{ display: 'flex', gap: 0, backgroundColor: '#000', borderBottom: '0.5px solid rgba(255,255,255,0.06)' }}>
+            {profile.subscriberCount !== null && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0', borderRight: profile.snapScore !== null ? '0.5px solid rgba(255,255,255,0.06)' : 'none' }}>
+                <span style={{ color: 'white', fontSize: 16, fontWeight: 900 }}>{fmtNum(profile.subscriberCount)}</span>
+                <span style={{ color: '#666', fontSize: 11, marginTop: 2 }} dir="rtl">متابعون</span>
+              </div>
+            )}
+            {profile.snapScore !== null && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 0' }}>
+                <span style={{ color: Y, fontSize: 16, fontWeight: 900 }}>{fmtNum(profile.snapScore)}</span>
+                <span style={{ color: '#666', fontSize: 11, marginTop: 2 }} dir="rtl">نقاط السناب</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 6px', backgroundColor: '#000' }}>
           <button onClick={() => setShowAccessModal(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '11px 0', borderRadius: 30, backgroundColor: 'rgba(44,44,46,0.92)', border: '0.5px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer', backdropFilter: 'blur(4px)' }} dir="rtl">
