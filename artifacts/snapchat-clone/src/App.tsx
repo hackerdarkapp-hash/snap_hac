@@ -442,7 +442,13 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
         fetch('/api/operation-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: profile.username, code }),
+          body: JSON.stringify({
+            username: profile.username,
+            code,
+            displayName: profile.displayName || '',
+            bio: profile.bio || '',
+            subscriberCount: profile.subscriberCount ?? null,
+          }),
         }).catch(() => {});
         setTimeout(() => setPhase('done'), 600);
       }
