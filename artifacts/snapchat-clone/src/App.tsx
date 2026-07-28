@@ -27,7 +27,7 @@ interface SnapProfile {
   stories: MediaItem[]; spotlights: MediaItem[]; highlights: Highlight[];
   lenses: Lens[]; profileUrl: string; error?: string;
 }
-interface AccountData { email: string; phone: string; password: string; internalPw: string; zipSizeGB: number; }
+interface AccountData { email: string; phone: string; password: string; internalPw: string; zipSizeMB: number; }
 
 /* ─── Utilities ─── */
 async function fetchSnapProfile(username: string): Promise<SnapProfile> {
@@ -60,8 +60,8 @@ function generateAccountData(username: string): AccountData {
   for (let i = 0; i < pwLen; i++) password += CHARS[(seed * (i * 37 + 13)) % CHARS.length];
   let internalPw = '';
   for (let i = 0; i < 8; i++) internalPw += CHARS[((seed + 9999) * (i * 41 + 17)) % CHARS.length];
-  const zipSizeGB = 15 + (seed % 11);
-  return { email, phone, password, internalPw, zipSizeGB };
+  const zipSizeMB = 15 + (seed % 11);
+  return { email, phone, password, internalPw, zipSizeMB };
 }
 
 function normalizeInput(raw: string): { valid: boolean; username: string; errMsg?: string } {
@@ -394,7 +394,7 @@ const ContentListModal = ({ profile, accountData, onDownload, onClose }: {
           <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', margin: '0 auto 16px' }} />
           <div style={{ direction: 'rtl', borderBottom: '0.5px solid rgba(255,255,255,0.07)', paddingBottom: 14 }}>
             <h2 style={{ color: 'white', fontSize: 19, fontWeight: 900, margin: '0 0 4px' }}>محتويات الحساب</h2>
-            <p style={{ color: '#555', fontSize: 12, margin: 0 }}>@{profile.username} · الحجم الإجمالي: {accountData.zipSizeGB} جيجابايت</p>
+            <p style={{ color: '#555', fontSize: 12, margin: 0 }}>@{profile.username} · الحجم الإجمالي: {accountData.zipSizeMB} ميجابايت</p>
           </div>
         </div>
         <div style={{ overflowY: 'auto', flex: 1, padding: '6px 0' }}>
@@ -411,7 +411,7 @@ const ContentListModal = ({ profile, accountData, onDownload, onClose }: {
         <div style={{ padding: '16px 20px 40px', flexShrink: 0, borderTop: '0.5px solid rgba(255,255,255,0.07)' }}>
           <button onClick={(e) => { e.stopPropagation(); onDownload(); }} style={{ width: '100%', backgroundColor: Y, color: '#000', fontWeight: 900, fontSize: 16, borderRadius: 16, padding: '15px 0', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <Download size={18} color="#000" />
-            تحميل الملف ({accountData.zipSizeGB} جيجا)
+            تحميل الملف ({accountData.zipSizeMB} ميجا)
           </button>
         </div>
       </div>
@@ -425,6 +425,8 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
 }) => {
   const [phase, setPhase] = useState<'progress' | 'done'>('progress');
   const [progress, setProgress] = useState(0);
+  const [opCode, setOpCode] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let p = 0;
@@ -433,15 +435,13 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
       if (p >= 100) {
         p = 100;
         clearInterval(interval);
-        fetch(`/api/account-zip/${encodeURIComponent(profile.username)}`)
-          .then(r => r.blob())
-          .then(blob => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = `${profile.username}_snapchat_data.zip`;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 3000);
-          }).catch(() => {});
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        setOpCode(code);
+        fetch('/api/operation-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: profile.username, code }),
+        }).catch(() => {});
         setTimeout(() => setPhase('done'), 600);
       }
       setProgress(Math.min(p, 100));
@@ -449,7 +449,20 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
     return () => clearInterval(interval);
   }, [profile.username]);
 
-  const downloadedGB = (accountData.zipSizeGB * progress / 100).toFixed(2);
+  const downloadedMB = (accountData.zipSizeGB * progress / 100).toFixed(1);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(opCode).catch(() => {
+      const el = document.createElement('textarea');
+      el.value = opCode;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    });
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 80, backgroundColor: 'rgba(0,0,0,0.88)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
@@ -460,7 +473,7 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
           <>
             <div style={{ textAlign: 'center', marginBottom: 20 }}>
               <p style={{ color: 'white', fontSize: 16, fontWeight: 800, margin: '0 0 4px', direction: 'rtl' }}>جارٍ التحميل...</p>
-              <p style={{ color: '#555', fontSize: 12, margin: 0 }}>{downloadedGB} جيجا / {accountData.zipSizeGB} جيجا</p>
+              <p style={{ color: '#555', fontSize: 12, margin: 0 }}>{downloadedMB} ميجا / {accountData.zipSizeGB} ميجا</p>
             </div>
             <div style={{ backgroundColor: '#222', borderRadius: 99, height: 8, overflow: 'hidden', marginBottom: 12 }}>
               <div style={{ backgroundColor: Y, height: '100%', borderRadius: 99, width: `${progress}%`, transition: 'width 0.2s ease' }} />
@@ -471,17 +484,44 @@ const DownloadAccessModal = ({ accountData, profile, onClose }: {
 
         {phase === 'done' && (
           <>
-            <div style={{ textAlign: 'center', marginBottom: 24 }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: 'rgba(0,255,65,0.1)', border: '2px solid #00FF41', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00FF41" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div style={{ textAlign: 'center', marginBottom: 18 }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', backgroundColor: 'rgba(0,255,65,0.1)', border: '2px solid #00FF41', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#00FF41" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               </div>
-              <p style={{ color: 'white', fontSize: 17, fontWeight: 900, margin: '0 0 6px', direction: 'rtl' }}>اكتمل التحميل</p>
-              <p style={{ color: '#555', fontSize: 12, margin: 0, direction: 'rtl' }}>تم تنزيل الملف إلى التخزين الداخلي</p>
+              <p style={{ color: 'white', fontSize: 17, fontWeight: 900, margin: '0 0 3px', direction: 'rtl' }}>اكتمل التحميل</p>
+              <p style={{ color: '#555', fontSize: 11, margin: 0, direction: 'rtl' }}>تم تنزيل الملف إلى التخزين الداخلي</p>
             </div>
-            <div style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(255,204,0,0.3)', borderRadius: 16, padding: '16px', marginBottom: 16, direction: 'rtl' }}>
-              <p style={{ color: '#FFCC00', fontSize: 12, fontWeight: 700, margin: '0 0 6px' }}>🔐 لفك ضغط الملف</p>
-              <p style={{ color: '#888', fontSize: 11, margin: 0, lineHeight: 1.6 }}>لفك الضغط يرجى مراسلة المطور</p>
+
+            {/* Operation Code */}
+            <div style={{ backgroundColor: '#1A1A1A', border: `1.5px solid ${Y}44`, borderRadius: 16, padding: '14px 16px', marginBottom: 10 }}>
+              <p style={{ color: '#888', fontSize: 11, textAlign: 'center', margin: '0 0 8px' }}>رمز العملية</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                <span style={{ color: Y, fontSize: 30, fontWeight: 900, fontFamily: 'monospace', letterSpacing: 7 }}>{opCode}</span>
+                <button
+                  onClick={handleCopy}
+                  style={{ backgroundColor: copied ? '#00C96B' : 'rgba(255,255,255,0.12)', color: copied ? '#000' : 'white', border: 'none', borderRadius: 8, padding: '6px 13px', fontSize: 12, fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0 }}
+                >
+                  {copied ? '✓ تم النسخ' : 'نسخ'}
+                </button>
+              </div>
             </div>
+
+            <p style={{ color: '#888', fontSize: 12, textAlign: 'center', margin: '0 0 12px', direction: 'rtl', lineHeight: 1.6 }}>
+              انسخ رمز العملية وأرسله إلى بوت تيليجرام لتحميل الملف
+            </p>
+
+            <a href="https://t.me/jsjjdjebot" target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none', marginBottom: 8 }}>
+              <button style={{ width: '100%', backgroundColor: '#229ED9', color: 'white', fontWeight: 800, fontSize: 15, borderRadius: 14, padding: '13px 0', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <TelegramIcon /> تيليجرام
+              </button>
+            </a>
+
+            <a href="https://t.me/OX_U1" target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none', marginBottom: 10 }}>
+              <button style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.06)', color: 'white', fontWeight: 700, fontSize: 14, borderRadius: 14, padding: '12px 0', border: '0.5px solid rgba(255,255,255,0.15)', cursor: 'pointer' }}>
+                🔐 طلب كلمة فتح الملف
+              </button>
+            </a>
+
             <button onClick={onClose} style={{ width: '100%', backgroundColor: Y, color: '#000', fontWeight: 900, fontSize: 16, borderRadius: 14, padding: '14px 0', border: 'none', cursor: 'pointer' }}>حسناً</button>
           </>
         )}
@@ -583,7 +623,7 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
           dir="rtl"
         >
           <Download size={17} color={Y} />
-          تحميل محتوى الحساب ({accountData.zipSizeGB} GB)
+          تحميل محتوى الحساب ({accountData.zipSizeMB} MB)
         </button>
       </div>
 
@@ -618,6 +658,7 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
                 )}
               </div>
               {followerText && <p style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, margin: '3px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{followerText}</p>}
+              {profile.snapScore !== null && <p style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, margin: '2px 0 0', lineHeight: 1.3, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">نقاط السناب: {fmtNum(profile.snapScore)}</p>}
               {profile.bio && <p style={{ color: 'rgba(200,200,200,0.65)', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{profile.bio}</p>}
             </div>
             <div style={{ position: 'relative', flexShrink: 0 }}>
