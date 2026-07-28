@@ -45,34 +45,31 @@ function fetchUrl(rawUrl, hops) {
 }
 
 function parseNextData(html) {
-  var m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  var m = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
   if (!m) return null;
   try { return JSON.parse(m[1]); } catch (e) { return null; }
-}
-
-function snapPageType(nd) {
-  // Snapchat nests pageProps twice: props.pageProps.pageProps
-  try {
-    var pp = nd.props.pageProps.pageProps;
-    if (pp && pp.pageMetadata && pp.pageMetadata.pageType) return pp.pageMetadata.pageType;
-    // Fallback single nesting
-    var pp2 = nd.props.pageProps;
-    if (pp2 && pp2.pageMetadata && pp2.pageMetadata.pageType) return pp2.pageMetadata.pageType;
-  } catch (e) {}
-  return null;
-}
-
-function snapUserInfo(nd) {
-  try {
-    var pp = nd.props.pageProps.pageProps;
-    return pp.userInfo || pp.userData || pp.user || pp.profileData || null;
-  } catch (e) { return null; }
 }
 
 function buildSnapcodeUrl(u) {
   return "https://app.snapchat.com/web/deeplink/snapcode?username=" + encodeURIComponent(u) + "&type=SVG&bitmoji=enable";
 }
 
+/*
+  Snapchat __NEXT_DATA__ real structure (verified Jul 2026):
+  nd.props.pageProps = {
+    pageMetadata: { pageType: 17 },   // 0 or missing = not found
+    userProfile: {
+      "$case": "publicProfileInfo",   // OR "userInfo"
+      publicProfileInfo: {            // when $case === "publicProfileInfo"
+        username, title, subscriberCount (STRING), profilePictureUrl, bio, snapcodeImageUrl, ...
+      },
+      userInfo: {                     // when $case === "userInfo"
+        username, displayName, snapcodeImageUrl, bitmoji3d, ...
+        // NO subscriberCount here
+      }
+    }
+  }
+*/
 async function handleSnapProfile(username) {
   var empty = { exists: false, username: username || "", displayName: username || "", bio: "", avatarUrl: "", bgUrl: "", snapcodeUrl: buildSnapcodeUrl(username || ""), subscriberCount: null, snapScore: null, lastActive: null, stories: [], spotlights: [], highlights: [], lenses: [], profileUrl: "https://www.snapchat.com/@" + (username || "") };
 
@@ -86,29 +83,52 @@ async function handleSnapProfile(username) {
   empty.profileUrl = "https://www.snapchat.com/@" + lc;
 
   try {
-    // Use /@ URL (canonical Snapchat profile page)
     var r = await fetchUrl("https://www.snapchat.com/@" + lc);
     if (r.status === 0) return Object.assign(empty, { error: "تعذّر الاتصال بسناب شات" });
+    if (r.status === 404) return empty; // user not found
 
     var nd = parseNextData(r.body);
-    if (!nd) {
-      // No NEXT_DATA at all - can't determine
-      return Object.assign(empty, { error: "لم يتم التعرف على الصفحة" });
-    }
+    if (!nd) return Object.assign(empty, { error: "لم يتم التعرف على الصفحة" });
 
-    var pageType = snapPageType(nd);
-    // NOT_FOUND means user doesn't exist
-    if (!pageType || pageType === "NOT_FOUND") {
-      return empty;
-    }
+    // ── pageProps is at nd.props.pageProps (single level, NOT double-nested) ──
+    var pp = nd.props && nd.props.pageProps;
+    if (!pp) return empty;
 
-    // User exists - extract info
-    var ui = snapUserInfo(nd);
-    var displayName = (ui && (ui.displayName || ui.display_name)) || lc;
-    var bio = (ui && ui.bio) || "";
-    var avatarUrl = (ui && (ui.snapchatAvatarImage || ui.bitmoji3dUrl || ui.avatarUrl || ui.profileImageUrl)) || "";
-    var snapcodeUrl = (ui && ui.snapcodeImageUrl) ? ui.snapcodeImageUrl.replace(/\\u0026/g, "&") : buildSnapcodeUrl(lc);
-    var subscriberCount = (ui && (ui.subscriberCount || ui.followerCount)) || null;
+    // pageType 0 or absent = not found
+    var pageType = pp.pageMetadata && pp.pageMetadata.pageType;
+    if (!pageType) return empty;
+
+    // ── Extract profile info based on $case ──
+    var userProfile = pp.userProfile || {};
+    var profileCase = userProfile["$case"];
+
+    var displayName = lc;
+    var bio = "";
+    var avatarUrl = "";
+    var snapcodeUrl = buildSnapcodeUrl(lc);
+    var subscriberCount = null;
+
+    if (profileCase === "publicProfileInfo" && userProfile.publicProfileInfo) {
+      var pub = userProfile.publicProfileInfo;
+      displayName = pub.title || pub.displayName || lc;
+      bio = pub.bio || "";
+      avatarUrl = pub.profilePictureUrl || "";
+      snapcodeUrl = (pub.snapcodeImageUrl || "").replace(/\\u0026/g, "&") || buildSnapcodeUrl(lc);
+      // subscriberCount is a STRING like "30485300" — parse it
+      if (pub.subscriberCount != null && pub.subscriberCount !== "" && pub.subscriberCount !== "0") {
+        var n = parseInt(pub.subscriberCount, 10);
+        if (!isNaN(n) && n > 0) subscriberCount = n;
+      }
+    } else if (profileCase === "userInfo" && userProfile.userInfo) {
+      var ui = userProfile.userInfo;
+      displayName = ui.displayName || lc;
+      bio = ui.bio || "";
+      // bitmoji3d.avatarImage.url is the avatar for userInfo profiles
+      avatarUrl = (ui.bitmoji3d && ui.bitmoji3d.avatarImage && ui.bitmoji3d.avatarImage.url) || "";
+      snapcodeUrl = (ui.snapcodeImageUrl || "").replace(/\\u0026/g, "&") || buildSnapcodeUrl(lc);
+      // subscriberCount not exposed for regular users
+      subscriberCount = null;
+    }
 
     // Fallback: og:image for avatar
     if (!avatarUrl) {

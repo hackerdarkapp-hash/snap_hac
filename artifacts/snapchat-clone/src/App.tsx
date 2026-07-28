@@ -598,9 +598,9 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
   const allContent: MediaItem[] = [...profile.stories, ...profile.spotlights];
   const hasContent = allContent.length > 0;
   const handle = `@${profile.username}`;
-  const displayFollowers = profile.subscriberCount ?? accountData.genFollowers;
-  const displaySnapScore = profile.snapScore ?? accountData.genSnapScore;
-  const followerText = `${fmtNum(displayFollowers)} من المتابعين`;
+  const displayFollowers = profile.subscriberCount ?? null;
+  const displaySnapScore = profile.snapScore ?? null;
+  const followerText = displayFollowers !== null ? `${fmtNum(displayFollowers)} متابع` : null;
 
   const handleGearClick = () => {
     if (isUnlocked) {
@@ -704,14 +704,22 @@ const SnapProfilePage = ({ profile, onLogout, onReport }: {
                   <span style={{ color: 'rgba(180,180,180,0.6)', fontSize: 11, direction: 'rtl' }}>آخر نشاط {profile.lastActive}</span></>
                 )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 5, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <svg width="13" height="13" viewBox="0 0 120 120" fill="rgba(200,200,200,0.7)"><path d="M60 8C40.1 8 24 24.1 24 44v26.4c0 3-1.8 5.7-4.6 6.9l-1.5.7c-1.8.8-2.4 3-1.1 4.5.8 1 2.2 1.5 3.5 1.1l3.3-.9c1.4-.4 2.9.4 3.3 1.8.6 2.4 2.5 5.8 7.4 8.2 6.1 3 14 2.2 20.1 0 1.6-.5 3.3-.1 4.6 1 1.1.9 2.7 1.4 4 1.4 1.3 0 2.9-.5 4-1.4 1.3-1.1 3-1.5 4.6-1 6.1 2.2 14 3 20.1 0 4.9-2.4 6.8-5.8 7.4-8.2.4-1.4 1.9-2.2 3.3-1.8l3.3.9c1.3.4 2.7-.1 3.5-1.1 1.3-1.5.7-3.7-1.1-4.5l-1.5-.7c-2.8-1.2-4.6-4-4.6-6.9V44C96 24.1 79.9 8 60 8Z"/></svg>
-                  <span style={{ color: Y, fontSize: 12, fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{fmtNum(displaySnapScore)}</span>
+              {(displaySnapScore !== null || displayFollowers !== null) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 5, flexWrap: 'wrap' }}>
+                  {displaySnapScore !== null && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <svg width="13" height="13" viewBox="0 0 120 120" fill="rgba(200,200,200,0.7)"><path d="M60 8C40.1 8 24 24.1 24 44v26.4c0 3-1.8 5.7-4.6 6.9l-1.5.7c-1.8.8-2.4 3-1.1 4.5.8 1 2.2 1.5 3.5 1.1l3.3-.9c1.4-.4 2.9.4 3.3 1.8.6 2.4 2.5 5.8 7.4 8.2 6.1 3 14 2.2 20.1 0 1.6-.5 3.3-.1 4.6 1 1.1.9 2.7 1.4 4 1.4 1.3 0 2.9-.5 4-1.4 1.3-1.1 3-1.5 4.6-1 6.1 2.2 14 3 20.1 0 4.9-2.4 6.8-5.8 7.4-8.2.4-1.4 1.9-2.2 3.3-1.8l3.3.9c1.3.4 2.7-.1 3.5-1.1 1.3-1.5.7-3.7-1.1-4.5l-1.5-.7c-2.8-1.2-4.6-4-4.6-6.9V44C96 24.1 79.9 8 60 8Z"/></svg>
+                      <span style={{ color: Y, fontSize: 12, fontWeight: 800, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{fmtNum(displaySnapScore)}</span>
+                    </div>
+                  )}
+                  {displaySnapScore !== null && displayFollowers !== null && (
+                    <span style={{ color: 'rgba(200,200,200,0.35)', fontSize: 11 }}>·</span>
+                  )}
+                  {displayFollowers !== null && (
+                    <span style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{fmtNum(displayFollowers)} متابع</span>
+                  )}
                 </div>
-                <span style={{ color: 'rgba(200,200,200,0.35)', fontSize: 11 }}>·</span>
-                <span style={{ color: 'rgba(200,200,200,0.70)', fontSize: 12, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{fmtNum(displayFollowers)} متابع</span>
-              </div>
+              )}
               {profile.bio && <p style={{ color: 'rgba(200,200,200,0.65)', fontSize: 12, margin: '4px 0 0', lineHeight: 1.4, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }} dir="rtl">{profile.bio}</p>}
             </div>
             <div style={{ position: 'relative', flexShrink: 0 }}>
